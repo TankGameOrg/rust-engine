@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::attribute::attribute_container::JsonType;
+use crate::attribute::attribute::JsonType;
 
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

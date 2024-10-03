@@ -1,2 +1,2 @@
 pub mod element;
-mod position;
+pub mod position;

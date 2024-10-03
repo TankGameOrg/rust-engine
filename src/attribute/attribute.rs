@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use std::fmt::{Debug};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use as_any::{AsAny, Downcast};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
+use crate::state::position::Position;
 
 #[typetag::serde(tag = "type")]
 pub trait JsonType : AsAny + Debug {}
-
 
 pub struct Attribute<T: JsonType> {
     key: String,
@@ -14,7 +15,7 @@ pub struct Attribute<T: JsonType> {
 }
 
 impl<T: JsonType> Attribute<T> {
-    pub fn new(key: String) -> Attribute<T> {
+    fn new(key: String) -> Attribute<T> {
         Attribute {key, phantom_data: PhantomData {}}
     }
 }
@@ -75,3 +76,8 @@ impl JsonType for i64 {}
 
 #[typetag::serde]
 impl JsonType for String {}
+
+lazy_static! {
+    pub static ref TEST_INT32 : Attribute<i32> = Attribute::new(String::from("TEST_INT32"));
+    pub static ref POSITION : Attribute<Position> = Attribute::new(String::from("POSITION"));
+}
