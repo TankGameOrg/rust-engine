@@ -63,6 +63,10 @@ impl AttributeContainer {
             .or(Some(default))
             .expect(format!("Failed to get from {:?} for {}", self, attribute.key).as_str())
     }
+
+    pub fn has<T: JsonType>(&self, attribute: &Attribute<T>) -> bool {
+        self.values.contains_key(&attribute.key)
+    }
 }
 
 #[typetag::serde]

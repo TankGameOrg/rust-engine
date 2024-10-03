@@ -4,12 +4,12 @@ use crate::attribute::attribute::JsonType;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Position {
-    pub x: i32,
-    pub y: i32,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl Position {
-    pub fn new(x: i32, y: i32) -> Position {
+    pub fn new(x: usize, y: usize) -> Position {
         Position { x, y }
     }
 }
