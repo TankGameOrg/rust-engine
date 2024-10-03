@@ -1,6 +1,5 @@
+use crate::util::attribute::JsonType;
 use serde::{Deserialize, Serialize};
-use crate::attribute::attribute::JsonType;
-
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Position {

@@ -1,22 +1,29 @@
+use as_any::{AsAny, Downcast};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use as_any::{AsAny, Downcast};
-use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
-use crate::state::position::Position;
 
 #[typetag::serde(tag = "type")]
-pub trait JsonType : AsAny + Debug {}
+pub trait JsonType: AsAny + Debug {}
+
+pub trait Container: JsonType {
+    fn to_container(&self) -> Option<&AttributeContainer> {
+        self.downcast_ref::<AttributeContainer>()
+    }
+}
 
 pub struct Attribute<T: JsonType> {
     key: String,
-    phantom_data: PhantomData<T>
+    phantom_data: PhantomData<T>,
 }
 
 impl<T: JsonType> Attribute<T> {
-    fn new(key: String) -> Attribute<T> {
-        Attribute {key, phantom_data: PhantomData {}}
+    pub fn new(key: &str) -> Attribute<T> {
+        Attribute {
+            key: String::from(key),
+            phantom_data: PhantomData {},
+        }
     }
 }
 
@@ -28,11 +35,17 @@ pub struct AttributeContainer {
 
 impl AttributeContainer {
     pub fn new() -> AttributeContainer {
-        AttributeContainer {values: HashMap::new(), class: None}
+        AttributeContainer {
+            values: HashMap::new(),
+            class: None,
+        }
     }
 
     pub fn new_with_class(string: String) -> AttributeContainer {
-        AttributeContainer {values: HashMap::new(), class: Some(string)}
+        AttributeContainer {
+            values: HashMap::new(),
+            class: Some(string),
+        }
     }
 
     pub fn put<T: JsonType>(&mut self, attribute: &Attribute<T>, value: T) {
@@ -45,7 +58,7 @@ impl AttributeContainer {
                 Some(t) => Some(t),
                 None => None,
             },
-            None => None
+            None => None,
         }
     }
 
@@ -72,16 +85,4 @@ impl AttributeContainer {
 #[typetag::serde]
 impl JsonType for AttributeContainer {}
 
-#[typetag::serde]
-impl JsonType for i32 {}
-
-#[typetag::serde]
-impl JsonType for i64 {}
-
-#[typetag::serde]
-impl JsonType for String {}
-
-lazy_static! {
-    pub static ref TEST_INT32 : Attribute<i32> = Attribute::new(String::from("TEST_INT32"));
-    pub static ref POSITION : Attribute<Position> = Attribute::new(String::from("POSITION"));
-}
+impl Container for AttributeContainer {}

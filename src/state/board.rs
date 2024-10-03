@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use crate::attribute::attribute::JsonType;
-use crate::state::element::{Element, Floor, Unit};
+use crate::state::element::{Floor, Unit};
 use crate::state::position::Position;
+use crate::util::attribute::JsonType;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Tile {
@@ -54,17 +54,20 @@ pub struct Board {
 
 impl Board {
     pub fn new(width: usize, height: usize) -> Board {
-
         let mut units = Grid::new();
         let mut floors = Grid::new();
-
 
         for _ in 0..height {
             units.push((0..width).map(|_| Tile::Empty).collect());
             floors.push((0..width).map(|_| Tile::Empty).collect());
         }
 
-        Board { width, height, units, floors }
+        Board {
+            width,
+            height,
+            units,
+            floors,
+        }
     }
 
     pub fn put_unit(&mut self, position: &Position, tile: Tile) {
@@ -82,11 +85,17 @@ impl Board {
     }
 
     pub fn get_unit(&self, position: &Position) -> Option<&Tile> {
-        self.units.get(position.y).map(|row| row.get(position.x)).flatten()
+        self.units
+            .get(position.y)
+            .map(|row| row.get(position.x))
+            .flatten()
     }
 
     pub fn get_floor(&self, position: &Position) -> Option<&Tile> {
-        self.floors.get(position.y).map(|row| row.get(position.x)).flatten()
+        self.floors
+            .get(position.y)
+            .map(|row| row.get(position.x))
+            .flatten()
     }
 }
 
