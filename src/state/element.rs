@@ -1,11 +1,10 @@
 use crate::state::position::Position;
-use crate::util::attribute::AttributeContainer;
-use crate::util::attributes::POSITION;
-use as_any::AsAny;
+use crate::util::attribute::{AttributeContainer, Container};
+use crate::util::attributes::{POSITION, WALKABLE};
 use std::fmt::Debug;
 
 #[typetag::serde]
-pub trait Element: AsAny + Debug {
+pub trait Element: Container + Debug {
     fn position(&self) -> &Position;
 }
 
@@ -30,6 +29,9 @@ impl Unit for AttributeContainer {}
 #[typetag::serde]
 impl Floor for AttributeContainer {
     fn is_walkable(&self) -> bool {
-        todo!()
+        match self.get(&WALKABLE) {
+            Some(value) => value.clone(),
+            None => true,
+        }
     }
 }

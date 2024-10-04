@@ -5,11 +5,18 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 #[typetag::serde(tag = "type")]
-pub trait JsonType: AsAny + Debug {}
+pub trait JsonType: AsAny + Debug + Send + Sync {}
 
+/*
+ * Container is only to be implemented by AttributeContainer. Because of this, we can safely unwrap.
+ */
 pub trait Container: JsonType {
-    fn to_container(&self) -> Option<&AttributeContainer> {
-        self.downcast_ref::<AttributeContainer>()
+    fn container(&self) -> &AttributeContainer {
+        self.downcast_ref::<AttributeContainer>().unwrap()
+    }
+
+    fn mut_container(&mut self) -> &mut AttributeContainer {
+        self.downcast_mut::<AttributeContainer>().unwrap()
     }
 }
 
@@ -85,4 +92,5 @@ impl AttributeContainer {
 #[typetag::serde]
 impl JsonType for AttributeContainer {}
 
+// This MUST be the only impl block for Container.
 impl Container for AttributeContainer {}

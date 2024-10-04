@@ -1,5 +1,8 @@
 use crate::state::board::{Board, Tile};
+use crate::state::meta::meta::new_meta;
+use crate::state::meta::player::new_players;
 use crate::state::position::Position;
+use crate::state::state::State;
 use crate::util::attribute::AttributeContainer;
 use crate::util::attributes::POSITION;
 
@@ -22,9 +25,11 @@ fn main() {
 
     let mut board: Board = Board::new(12, 12);
     board.put_unit(&position, Tile::Unit(Box::new(from_json)));
-    let board_json = serde_json::to_value(&board).unwrap();
-    let board_json_string = board_json.to_string();
-    let board_from_json: Board = serde_json::from_str(&board_json_string).unwrap();
-    println!("{}", board_json_string);
-    println!("{:?}", board_from_json);
+
+    let players = new_players();
+    let meta = new_meta();
+
+    let state: State = State::new(board, players, meta);
+    println!("{:?}", state);
+    println!("{}", serde_json::to_string(&state).unwrap());
 }
