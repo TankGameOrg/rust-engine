@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::rule::action::{ActionDescription, ActionProvider};
 use crate::rule::context::Context;
 use crate::ruleset::response::Response;
@@ -17,7 +18,7 @@ impl DefaultV3Actions {
 }
 
 impl ActionProvider for DefaultV3Actions {
-    fn actions(&self) -> Vec<ActionDescription> {
+    fn actions(&self) -> HashMap<String, ActionDescription> {
         todo!()
     }
 }

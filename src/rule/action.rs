@@ -10,7 +10,7 @@ pub type Application = Box<dyn Fn(&mut Context)>;
 pub type VariantProducer = Box<dyn Fn(&State, &PlayerRef) -> Vec<Box<dyn JsonType>>>;
 
 pub trait ActionProvider {
-    fn actions(&self) -> Vec<ActionDescription>;
+    fn actions(&self) -> HashMap<String, ActionDescription>;
 }
 
 pub struct ActionDescription {

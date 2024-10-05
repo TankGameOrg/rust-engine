@@ -1,11 +1,10 @@
-use crate::state::meta::player::PlayerRef;
 use crate::util::attribute::{AttributeContainer, JsonType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum EntryData {
     StartOfDay,
-    PlayerAction(PlayerRef, String), // initiator, action name
+    PlayerAction(String), // initiator, action name
 }
 
 #[typetag::serde]

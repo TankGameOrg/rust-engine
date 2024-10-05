@@ -16,6 +16,10 @@ impl Response {
     pub fn new(response: Vec<String>) -> Response {
         Response { response }
     }
+
+    pub fn concat(&mut self, other: Response) {
+        self.response.extend(other.response)
+    }
 }
 
 #[typetag::serde]
