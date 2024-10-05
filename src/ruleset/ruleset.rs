@@ -15,11 +15,11 @@ pub trait RulesetProvider {
 }
 
 pub struct Ruleset {
-    pub action_map: HashMap<String, ActionDescription>,
-    pub handle_tick: Box<dyn Fn(&mut State) -> Response>,
-    pub handle_checks: Box<dyn Fn(&mut State) -> Response>,
-    pub handle_damage: Box<dyn Fn(&mut Context, &Position) -> Response>,
-    pub handle_destroy: Box<dyn Fn(&mut Context, &Position) -> Response>,
+    action_map: HashMap<String, ActionDescription>,
+    handle_tick: Box<dyn Fn(&mut State) -> Response>,
+    handle_checks: Box<dyn Fn(&mut State) -> Response>,
+    handle_damage: Box<dyn Fn(&mut Context, &Position) -> Response>,
+    handle_destroy: Box<dyn Fn(&mut Context, &Position) -> Response>,
 }
 
 impl Ruleset {

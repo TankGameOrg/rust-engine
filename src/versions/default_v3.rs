@@ -19,7 +19,7 @@ impl DefaultV3Actions {
 
 impl ActionProvider for DefaultV3Actions {
     fn actions(&self) -> HashMap<String, ActionDescription> {
-        todo!()
+        HashMap::new()
     }
 }
 

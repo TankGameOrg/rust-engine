@@ -1,11 +1,14 @@
+use crate::rule::context::Context;
+use crate::rule::log_entry::{EntryData, LogEntry};
 use crate::state::board::Board;
 use crate::state::element::new_tank;
 use crate::state::meta::meta::new_meta;
-use crate::state::meta::player::{new_players, PlayerRef};
+use crate::state::meta::player::{new_players, PlayerRef, Players};
 use crate::state::position::Position;
 use crate::state::state::State;
 use crate::util::attribute::AttributeContainer;
 use crate::util::attributes::POSITION;
+use crate::versions::default_v3::DefaultV3;
 
 pub mod rule;
 pub mod ruleset;
@@ -35,7 +38,7 @@ fn main() {
     let players = new_players();
     let meta = new_meta();
 
-    let state: State = State::new(board, players, meta);
+    let mut state: State = State::new(board, players, meta);
     println!("{:?}", state);
     println!("{}", serde_json::to_string(&state).unwrap());
 
@@ -43,4 +46,11 @@ fn main() {
         "{:?}",
         state.board().get_highest(&Position::new(1, 2)).unwrap()
     );
+
+    let mut context = Context::new(&mut state, PlayerRef::new(String::from("Player")), LogEntry::new(0, EntryData::StartOfDay, AttributeContainer::new()));
+
+    let ruleset = DefaultV3::ruleset();
+    ruleset.handle_action(&mut context);
+
+     println!("{:?}", state.board());
 }
