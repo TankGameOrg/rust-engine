@@ -14,4 +14,7 @@ impl JsonType for i64 {}
 impl JsonType for String {}
 
 #[typetag::serde]
+impl JsonType for Vec<i32> {}
+
+#[typetag::serde]
 impl JsonType for Vec<PlayerRef> {}

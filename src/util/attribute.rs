@@ -87,6 +87,10 @@ impl AttributeContainer {
     pub fn has<T: JsonType>(&self, attribute: &Attribute<T>) -> bool {
         self.values.contains_key(&attribute.key)
     }
+
+    pub fn get_class(&self) -> Option<&String> {
+        self.class.as_ref()
+    }
 }
 
 #[typetag::serde]

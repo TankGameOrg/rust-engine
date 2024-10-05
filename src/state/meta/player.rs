@@ -1,7 +1,7 @@
 use crate::util::attribute::{AttributeContainer, Container, JsonType};
-use std::fmt::Debug;
-use serde::{Deserialize, Serialize};
 use crate::util::attributes::NAME;
+use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 #[typetag::serde]
 pub trait Player: Container + Debug {
