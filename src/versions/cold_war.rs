@@ -9,25 +9,25 @@ use crate::state::position::Position;
 use crate::state::state::State;
 use crate::util::attributes::{ACTIONS, DAMAGE, DURABILITY, GOLD, WALKABLE};
 
-struct DefaultV3Actions;
+struct ColdWarActions;
 
-impl DefaultV3Actions {
-    pub const fn new() -> DefaultV3Actions {
-        DefaultV3Actions
+impl ColdWarActions {
+    pub const fn new() -> ColdWarActions {
+        ColdWarActions
     }
 }
 
-impl ActionProvider for DefaultV3Actions {
+impl ActionProvider for ColdWarActions {
     fn actions(&self) -> HashMap<String, ActionDescription> {
         HashMap::new()
     }
 }
 
-pub struct DefaultV3;
+pub struct ColdWar;
 
-impl DefaultV3 {
+impl ColdWar {
     pub fn ruleset() -> Ruleset {
-        static RULESET: DefaultV3 = DefaultV3;
+        static RULESET: ColdWar = ColdWar;
         Ruleset::new(Box::new(&RULESET))
     }
 
@@ -95,9 +95,9 @@ impl DefaultV3 {
     }
 }
 
-impl RulesetProvider for DefaultV3 {
+impl RulesetProvider for ColdWar {
     fn action_provider(&self) -> Box<&'static dyn ActionProvider> {
-        static ACTION_PROVIDER: DefaultV3Actions = DefaultV3Actions::new();
+        static ACTION_PROVIDER: ColdWarActions = ColdWarActions::new();
         Box::new(&ACTION_PROVIDER)
     }
 

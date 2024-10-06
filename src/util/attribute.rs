@@ -32,6 +32,10 @@ impl<T: JsonType> Attribute<T> {
             phantom_data: PhantomData {},
         }
     }
+
+    pub fn key(&self) -> &String {
+        &self.key
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

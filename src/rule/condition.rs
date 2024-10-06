@@ -18,6 +18,12 @@ pub struct ConditionFailure {
     failure: FailureType,
 }
 
+impl ConditionFailure {
+    pub fn new(message: String, failure: FailureType) -> ConditionFailure {
+        ConditionFailure { message, failure }
+    }
+}
+
 #[typetag::serde]
 impl JsonType for FailureType {}
 

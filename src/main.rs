@@ -3,12 +3,12 @@ use crate::rule::log_entry::{EntryData, LogEntry};
 use crate::state::board::Board;
 use crate::state::element::new_tank;
 use crate::state::meta::meta::new_meta;
-use crate::state::meta::player::{new_players, PlayerRef, Players};
+use crate::state::meta::player::{new_players, PlayerRef};
 use crate::state::position::Position;
 use crate::state::state::State;
 use crate::util::attribute::AttributeContainer;
 use crate::util::attributes::POSITION;
-use crate::versions::default_v3::DefaultV3;
+use crate::versions::cold_war::ColdWar;
 
 pub mod rule;
 pub mod ruleset;
@@ -49,7 +49,7 @@ fn main() {
 
     let mut context = Context::new(&mut state, PlayerRef::new(String::from("Player")), LogEntry::new(0, EntryData::StartOfDay, AttributeContainer::new()));
 
-    let ruleset = DefaultV3::ruleset();
+    let ruleset = ColdWar::ruleset();
     ruleset.handle_action(&mut context);
 
      println!("{:?}", state.board());
