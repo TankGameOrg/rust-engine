@@ -1,4 +1,3 @@
-use crate::util::attribute::JsonType;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -12,6 +11,3 @@ impl Position {
         Position { x, y }
     }
 }
-
-#[typetag::serde]
-impl JsonType for Position {}

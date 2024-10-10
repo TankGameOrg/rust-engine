@@ -1,20 +1,11 @@
-use crate::state::element::Element;
-use crate::state::meta::player::PlayerRef;
 use crate::state::position::Position;
-use crate::util::attribute::JsonType;
-use crate::util::attributes::{PLAYER_REF, POSITION};
-use serde::{Deserialize, Serialize};
+use crate::state::state::{Reference, State};
+use crate::util::attribute::AttributeContainer;
+use crate::util::attribute_impl::BOARD;
+
+type Grid = Vec<Vec<Option<Reference>>>;
 
 #[derive(Debug)]
-pub enum Tile<'a> {
-    Unit(&'a Box<dyn Element>),
-    Floor(&'a Box<dyn Element>),
-}
-
-// Grid[y][x]
-pub type Grid = Vec<Vec<Option<Box<dyn Element>>>>;
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct Board {
     width: usize,
     height: usize,
@@ -22,16 +13,50 @@ pub struct Board {
     floors: Grid,
 }
 
+impl State {
+    pub fn get_board(&self) -> &Board {
+        self.get_container().get_unsafe(&BOARD)
+    }
+
+    pub fn get_board_mut(&mut self) -> &mut Board {
+        self.get_container_mut().get_mut_unsafe(&BOARD)
+    }
+
+    pub fn board_put_unit(&mut self, position: &Position, unit: AttributeContainer) {
+        let reference = self.put(unit);
+        self.get_board_mut().put_unit(position, reference);
+    }
+
+    pub fn board_put_floor(&mut self, position: &Position, unit: AttributeContainer) {
+        let reference = self.put(unit);
+        self.get_board_mut().put_floor(position, reference);
+    }
+
+    pub fn board_get_unit(&self, position: &Position) -> Option<&AttributeContainer> {
+        let reference = self.get_board().get_unit(position)?;
+        self.get(&reference)
+    }
+
+    pub fn board_get_unit_mut(&mut self, position: &Position) -> Option<&mut AttributeContainer> {
+        let reference = self.get_board().get_unit(position)?;
+        self.get_mut(&reference)
+    }
+
+    pub fn board_get_floor(&self, position: &Position) -> Option<&AttributeContainer> {
+        let reference = self.get_board().get_floor(position)?;
+        self.get(&reference)
+    }
+
+    pub fn board_get_floor_mut(&mut self, position: &Position) -> Option<&mut AttributeContainer> {
+        let reference = self.get_board().get_floor(position)?;
+        self.get_mut(&reference)
+    }
+}
+
 impl Board {
-    pub fn new(width: usize, height: usize) -> Board {
-        let mut units = Grid::new();
-        let mut floors = Grid::new();
-
-        for _ in 0..height {
-            units.push((0..width).map(|_| None).collect());
-            floors.push((0..width).map(|_| None).collect());
-        }
-
+    pub fn new(width: usize, height: usize) -> Self {
+        let units = vec![vec![None; width]; height];
+        let floors = vec![vec![None; width]; height];
         Board {
             width,
             height,
@@ -40,173 +65,47 @@ impl Board {
         }
     }
 
-    pub fn put_unit(&mut self, position: &Position, mut tile: Option<Box<dyn Element>>) {
-        match tile {
-            Some(ref mut unit) => unit.mut_container().put(&POSITION, position.clone()),
-            None => {}
-        }
-        self.units[position.y][position.x] = tile;
+    #[inline]
+    fn is_position_invalid(&self, position: &Position) -> bool {
+        position.x >= self.width || position.y >= self.height
     }
 
-    pub fn put_floor(&mut self, position: &Position, mut tile: Option<Box<dyn Element>>) {
-        match tile {
-            Some(ref mut floor) => floor.mut_container().put(&POSITION, position.clone()),
-            None => {}
-        }
-        self.floors[position.y][position.x] = tile;
-    }
-
-    pub fn has_unit(&self, position: &Position) -> bool {
-        self.units[position.y][position.x].is_some()
-    }
-
-    pub fn get_unit(&self, position: &Position) -> Result<&Option<Box<dyn Element>>, ()> {
-        self.units
-            .get(position.y)
-            .ok_or(())?
-            .get(position.x)
-            .ok_or(())
-    }
-
-    pub fn get_unit_unsafe(&self, position: &Position) -> Result<&Box<dyn Element>, ()> {
-        self.units
-            .get(position.y)
-            .ok_or(())?
-            .get(position.x)
-            .ok_or(())?
-            .as_ref()
-            .ok_or(())
-    }
-
-    pub fn get_unit_mut_unsafe(
-        &mut self,
-        position: &Position,
-    ) -> Result<&mut Box<dyn Element>, ()> {
-        self.units
-            .get_mut(position.y)
-            .ok_or(())?
-            .get_mut(position.x)
-            .ok_or(())?
-            .as_mut()
-            .ok_or(())
-    }
-
-    pub fn has_floor(&self, position: &Position) -> bool {
-        self.floors[position.y][position.x].is_some()
-    }
-
-    pub fn get_floor(&self, position: &Position) -> Result<&Option<Box<dyn Element>>, ()> {
-        self.floors
-            .get(position.y)
-            .ok_or(())?
-            .get(position.x)
-            .ok_or(())
-    }
-
-    pub fn get_floor_unsafe(&self, position: &Position) -> Result<&Box<dyn Element>, ()> {
-        self.floors
-            .get(position.y)
-            .ok_or(())?
-            .get(position.x)
-            .ok_or(())?
-            .as_ref()
-            .ok_or(())
-    }
-
-    pub fn get_floor_mut_unsafe(
-        &mut self,
-        position: &Position,
-    ) -> Result<&mut Box<dyn Element>, ()> {
-        self.floors
-            .get_mut(position.y)
-            .ok_or(())?
-            .get_mut(position.x)
-            .ok_or(())?
-            .as_mut()
-            .ok_or(())
-    }
-
-    pub fn get_highest(&self, position: &Position) -> Result<Tile, ()> {
-        let unit = self.get_unit(position)?;
-
-        if unit.is_some() {
-            Ok(Tile::Unit(self.get_unit_unsafe(position)?))
-        } else {
-            Ok(Tile::Floor(self.get_floor_unsafe(position)?))
+    #[inline]
+    fn panic_if_out_of_bounds(&self, position: &Position) {
+        if self.is_position_invalid(position) {
+            panic!("{}", format!("Invalid position: {:?}", position).as_str());
         }
     }
 
-    pub fn get_tank_for_ref(&self, player_ref: &PlayerRef) -> Option<&Box<dyn Element>> {
-        for row in &self.units {
-            for unit in row {
-                match unit {
-                    Some(unit) => {
-                        if unit.container().get_unsafe(&PLAYER_REF).name() == player_ref.name() {
-                            return Some(unit);
-                        }
-                    }
-                    None => continue,
-                }
-            }
-        }
-        None
+    pub fn put_unit(&mut self, position: &Position, unit: Reference) {
+        self.panic_if_out_of_bounds(&position);
+        self.units[position.y][position.x] = Some(unit);
     }
 
-    pub fn get_tank_for_ref_mut(
-        &mut self,
-        player_ref: &PlayerRef,
-    ) -> Option<&mut Box<dyn Element>> {
-        for row in &mut self.units {
-            for unit in row {
-                match unit {
-                    Some(unit) => {
-                        if unit.container().get_unsafe(&PLAYER_REF).name() == player_ref.name() {
-                            return Some(unit);
-                        }
-                    }
-                    None => continue,
-                }
-            }
-        }
-        None
+    pub fn put_floor(&mut self, position: &Position, floor: Reference) {
+        self.panic_if_out_of_bounds(&position);
+        self.floors[position.y][position.x] = Some(floor);
     }
 
-    pub fn get_all_units(&self) -> Vec<&Box<dyn Element>> {
-        self.units
-            .iter()
-            .map(|row| row.iter())
-            .flatten()
-            .filter_map(|unit| unit.as_ref())
-            .collect()
+    pub fn get_unit(&self, position: &Position) -> Option<Reference> {
+        self.panic_if_out_of_bounds(&position);
+        Some(
+            self.units
+                .get(position.y)?
+                .get(position.x)?
+                .as_ref()?
+                .clone(),
+        )
     }
 
-    pub fn get_all_units_mut(&mut self) -> Vec<&mut Box<dyn Element>> {
-        self.units
-            .iter_mut()
-            .map(|row| row.iter_mut())
-            .flatten()
-            .filter_map(|unit| unit.as_mut())
-            .collect()
-    }
-
-    pub fn get_all_floors(&self) -> Vec<&Box<dyn Element>> {
-        self.floors
-            .iter()
-            .map(|row| row.iter())
-            .flatten()
-            .filter_map(|unit| unit.as_ref())
-            .collect()
-    }
-
-    pub fn get_all_floors_mut(&mut self) -> Vec<&mut Box<dyn Element>> {
-        self.floors
-            .iter_mut()
-            .map(|row| row.iter_mut())
-            .flatten()
-            .filter_map(|unit| unit.as_mut())
-            .collect()
+    pub fn get_floor(&self, position: &Position) -> Option<Reference> {
+        self.panic_if_out_of_bounds(&position);
+        Some(
+            self.floors
+                .get(position.y)?
+                .get(position.x)?
+                .as_ref()?
+                .clone(),
+        )
     }
 }
-
-#[typetag::serde]
-impl JsonType for Board {}

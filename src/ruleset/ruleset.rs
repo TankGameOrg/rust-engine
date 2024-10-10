@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use crate::rule::action::{ActionDescription, ActionProvider};
 use crate::rule::context::Context;
 use crate::rule::log_entry::EntryData;
 use crate::ruleset::response::Response;
 use crate::state::position::Position;
 use crate::state::state::State;
+use std::collections::HashMap;
 
 pub trait RulesetProvider {
     fn action_provider(&self) -> Box<&'static dyn ActionProvider>;
     fn handle_tick(&self, state: &mut State) -> Response;
-    fn handle_checks(&self, state: &State) -> Response;
+    fn handle_checks(&self, state: &mut State) -> Response;
     fn handle_damage(&self, context: &mut Context, position: &Position) -> Response;
     fn handle_destroy(&self, context: &mut Context, position: &Position) -> Response;
 }
@@ -47,7 +47,10 @@ impl Ruleset {
         match &context.log_entry.entry_type {
             EntryData::StartOfDay => self.handle_tick(context.state),
             EntryData::PlayerAction(action_name) => {
-                self.action_map.get(action_name).expect(format!("Action {} is not implemented", action_name).as_str()).apply(context);
+                self.action_map
+                    .get(action_name)
+                    .expect(format!("Action {} is not implemented", action_name).as_str())
+                    .apply(context);
                 (self.handle_checks)(context.state)
             }
         }

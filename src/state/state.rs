@@ -1,66 +1,97 @@
-use crate::state::board::Board;
-use crate::state::meta::meta::Meta;
-use crate::state::meta::player::{Player, PlayerRef, Players};
-use crate::util::attribute::JsonType;
-use serde::{Deserialize, Serialize};
+use crate::util::attribute::{Attribute, AttributeContainer, AttributeValue};
+use std::collections::HashMap;
+use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug)]
+pub type Reference = Uuid;
+pub type Pool = HashMap<Reference, AttributeContainer>;
+
+#[derive(Debug)]
 pub struct State {
-    board: Board,
-    players: Players,
-    meta: Box<dyn Meta>,
+    pool: Pool,
+    container: Reference,
 }
 
 impl State {
-    pub fn new(board: Board, players: Players, meta: Box<dyn Meta>) -> Self {
+    pub fn new() -> State {
+        let mut initial_map = HashMap::new();
+        let container = AttributeContainer::new();
+        let reference = Reference::new_v4();
+        initial_map.insert(reference, container);
+
         State {
-            board,
-            players,
-            meta,
+            pool: initial_map,
+            container: reference,
         }
     }
 
-    pub fn board(&self) -> &Board {
-        &self.board
+    pub fn create_reference(&self) -> Reference {
+        Reference::new_v4()
     }
 
-    pub fn players(&self) -> &Players {
-        &self.players
+    pub fn put(&mut self, attribute: AttributeContainer) -> Reference {
+        let reference = Reference::new_v4();
+        self.pool.insert(reference, attribute);
+        reference.clone()
     }
 
-    pub fn meta(&self) -> &Box<dyn Meta> {
-        &self.meta
+    pub fn put_with_given_reference(
+        &mut self,
+        reference: Reference,
+        container: AttributeContainer,
+    ) -> Option<AttributeContainer> {
+        self.pool.insert(reference, container)
     }
 
-    pub fn board_mut(&mut self) -> &mut Board {
-        &mut self.board
+    pub fn remove(&mut self, reference: &Reference) -> Option<AttributeContainer> {
+        self.pool.remove(reference)
     }
 
-    pub fn players_mut(&mut self) -> &mut Players {
-        &mut self.players
+    pub fn get(&self, reference: &Reference) -> Option<&AttributeContainer> {
+        self.pool.get(reference)
     }
 
-    pub fn meta_mut(&mut self) -> &mut Box<dyn Meta> {
-        &mut self.meta
+    pub fn get_mut(&mut self, reference: &Reference) -> Option<&mut AttributeContainer> {
+        self.pool.get_mut(reference)
     }
 
-    pub fn player_from_ref<'a>(&'a self, player_ref: &PlayerRef) -> &'a Box<dyn Player> {
-        self.players
+    pub fn get_container(&self) -> &AttributeContainer {
+        self.get(&self.container).unwrap()
+    }
+
+    pub fn get_container_mut(&mut self) -> &mut AttributeContainer {
+        let reference = self.container.clone();
+        self.get_mut(&reference).expect("Pool does not have state")
+    }
+
+    pub fn gather<T: AttributeValue + Eq>(
+        &self,
+        attribute: &Attribute<T>,
+        value: &T,
+    ) -> Vec<(&Reference, &AttributeContainer)> {
+        self.pool
             .iter()
-            .find(|p| p.name() == player_ref.name())
-            .expect(format!("Player {} not found", player_ref.name()).as_str())
+            .filter(|(_, container)| {
+                container
+                    .get(attribute)
+                    .map(|t| t == value)
+                    .unwrap_or(false)
+            })
+            .collect()
     }
 
-    pub fn player_from_ref_mut<'a>(
-        &'a mut self,
-        player_ref: &PlayerRef,
-    ) -> &'a mut Box<dyn Player> {
-        self.players
+    pub fn gather_mut<T: AttributeValue + Eq>(
+        &mut self,
+        attribute: &Attribute<T>,
+        value: &T,
+    ) -> Vec<(&Reference, &mut AttributeContainer)> {
+        self.pool
             .iter_mut()
-            .find(|p| p.name() == player_ref.name())
-            .expect(format!("Player {} not found", player_ref.name()).as_str())
+            .filter(|(_, container)| {
+                container
+                    .get(attribute)
+                    .map(|t| t == value)
+                    .unwrap_or(false)
+            })
+            .collect()
     }
 }
-
-#[typetag::serde]
-impl JsonType for State {}

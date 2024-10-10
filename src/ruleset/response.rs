@@ -1,7 +1,3 @@
-use crate::util::attribute::JsonType;
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct Response {
     response: Vec<String>,
 }
@@ -21,6 +17,3 @@ impl Response {
         self.response.extend(other.response)
     }
 }
-
-#[typetag::serde]
-impl JsonType for Response {}

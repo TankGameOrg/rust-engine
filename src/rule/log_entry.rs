@@ -1,16 +1,10 @@
-use crate::util::attribute::{AttributeContainer, JsonType};
-use serde::{Deserialize, Serialize};
+use crate::util::attribute::AttributeContainer;
 
-#[derive(Serialize, Deserialize, Debug)]
 pub enum EntryData {
     StartOfDay,
-    PlayerAction(String), // initiator, action name
+    PlayerAction(String),
 }
 
-#[typetag::serde]
-impl JsonType for EntryData {}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct LogEntry {
     pub timestamp: u64,
     pub entry_type: EntryData,
@@ -26,6 +20,3 @@ impl LogEntry {
         }
     }
 }
-
-#[typetag::serde]
-impl JsonType for LogEntry {}
