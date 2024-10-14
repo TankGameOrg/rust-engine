@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use derive_defaults::derive_defaults;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive_defaults()]
 pub enum Upgrade {
     Range(i32),
     Speed(i32),

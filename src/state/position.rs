@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use derive_defaults::derive_defaults;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive_defaults()]
 pub struct Position {
     pub x: usize,
     pub y: usize,

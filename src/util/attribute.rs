@@ -6,6 +6,7 @@ use as_any::{AsAny, Downcast};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use derive_defaults::derive_defaults;
 
 pub trait AttributeValue: AsAny + Debug + Send + Sync {}
 
@@ -27,7 +28,7 @@ impl<T: AttributeValue> Attribute<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive_defaults()]
 pub struct AttributeContainer {
     values: HashMap<&'static str, Box<dyn AttributeValue>>,
 }
