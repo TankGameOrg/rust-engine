@@ -1,0 +1,17 @@
+[package]
+name = "rstankgame"
+version = "0.0.1"
+edition = "2021"
+
+[workspace]
+members = ["derive_defaults"]
+
+[dependencies]
+derive_defaults = { path = "derive_defaults" }
+
+as-any = "0.3.1"
+lazy_static = "1.5.0"
+uuid = { version =  "1.10.0", features = ["v4"] }
+
+[features]
+serialization = ["derive_defaults/serialization"]

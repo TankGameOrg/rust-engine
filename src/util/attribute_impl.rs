@@ -1,0 +1,37 @@
+use crate::state::board::Board;
+use crate::state::position::Position;
+use crate::state::state::Reference;
+use crate::state::upgrade::Upgrade;
+use crate::util::attribute::Attribute;
+use lazy_static::lazy_static;
+
+lazy_static! {
+
+    // Players
+    pub static ref NAME: Attribute<String> = Attribute::new("NAME");
+    pub static ref PLAYER_REF: Attribute<Reference> = Attribute::new("PLAYER_REF");
+    pub static ref ACTIONS: Attribute<i32> = Attribute::new("ACTIONS");
+    pub static ref MAX_ACTIONS: Attribute<i32> = Attribute::new("MAX_ACTIONS");
+    pub static ref VOTES: Attribute<i32> = Attribute::new("VOTES");
+
+    // State
+    pub static ref BOARD: Attribute<Board> = Attribute::new("BOARD");
+
+    // Council
+    pub static ref COUNCIL: Attribute<Reference> = Attribute::new("COUNCIL");
+    pub static ref COUNCILORS: Attribute<Vec<Reference>> = Attribute::new("COUNCILORS");
+    pub static ref COFFER: Attribute<i32> = Attribute::new("COFFER");
+
+    // Elements
+    pub static ref POSITION: Attribute<Position> = Attribute::new("POSITION");
+    pub static ref DURABILITY: Attribute<i32> = Attribute::new("DURABILITY");
+
+    // Floors
+    pub static ref WALKABLE: Attribute<bool> = Attribute::new("WALKABLE");
+
+    // Units
+    pub static ref GOLD: Attribute<i32> = Attribute::new("GOLD");
+    pub static ref RANGE: Attribute<i32> = Attribute::new("RANGE");
+    pub static ref BOUNTY: Attribute<i32> = Attribute::new("BOUNTY");
+    pub static ref UPGRADES: Attribute<Vec<Upgrade>> = Attribute::new("BOUNTY");
+}
