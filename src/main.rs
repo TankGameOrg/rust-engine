@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, fmt::Display, marker::PhantomData};
+use std::{any::{Any, TypeId}, collections::HashMap, fmt::Display, marker::PhantomData};
 use core::error::Error;
 
 #[derive(Debug)]
@@ -35,6 +35,7 @@ impl<T> Attribute<T> {
 
 static DURABILITY: Attribute<u32> = Attribute::new("durability");
 static PLAYER: Attribute<Handle> = Attribute::new("player");
+static DAILY_DAMAGE: Attribute<u32> = Attribute::new("daily_damage");
 
 #[derive(Debug)]
 struct AttributeContainer {
@@ -62,6 +63,60 @@ impl AttributeContainer {
 
     fn put<T: 'static>(&mut self, key: &Attribute<T>, value: T) {
         self.attributes.insert(key.name, Box::new(value));
+    }
+
+    fn has<T: 'static>(&self, key: &Attribute<T>) -> bool {
+        self.attributes.contains_key(key.name)
+    }
+
+    fn visit_all(&self, visitor: AttributeVisitor) {
+        for (attribute, value) in &self.attributes {
+            visitor.visit(attribute, value.as_ref());
+        }
+    }
+}
+
+struct AttributeVisitorConcrete<T: 'static + Clone> {
+    callback: &'static dyn Fn(&'static str, T),
+}
+
+trait AttributeVisitorTrait {
+    fn call(&self, name: &'static str, value: &dyn Any);
+}
+
+impl<T: 'static + Clone> AttributeVisitorTrait for AttributeVisitorConcrete<T> {
+    fn call(&self, name: &'static str, value: &dyn Any) {
+        match value.downcast_ref::<T>() {
+            Some(value) => (self.callback)(name, value.clone()),
+            None => panic!("Not allowed"),
+        }
+    }
+}
+
+struct AttributeVisitor {
+    visitors: HashMap<TypeId, Box<dyn AttributeVisitorTrait>>,
+}
+
+impl AttributeVisitor {
+    fn new() -> AttributeVisitor {
+        AttributeVisitor {
+            visitors: HashMap::new(),
+        }
+    }
+
+    fn add_visitor<T: 'static + Clone, F: Fn(&'static str, T) + 'static>(&mut self, visitor_fn: &'static F) {
+        self.visitors.insert(TypeId::of::<T>(), Box::new(AttributeVisitorConcrete {
+            callback: visitor_fn,
+        }));
+    }
+
+    fn visit(&self, name: &'static str, value: &dyn Any) {
+        match self.visitors.get(&value.type_id()) {
+            Some(visitor) => {
+                visitor.call(name, value);
+            },
+            None => panic!("Bad {}", name),
+        }
     }
 }
 
@@ -176,6 +231,23 @@ impl Pool {
         self.containers.get_mut(&handle)
             .ok_or(Box::new(BasicError(format!("Attribute container for {:?} does not exist", handle))))
     }
+
+    fn gather<'a>(&'a self, predicate: &'a dyn Fn(&AttributeContainer) -> bool) -> impl Iterator<Item = (Handle, &'a AttributeContainer)> {
+        self.containers.iter()
+            .filter(|(_, container)| predicate(*container))
+            .map(|(handle, container)| (*handle, container))
+    }
+}
+
+fn damage_all(pool: &mut Pool) -> Result<Transaction, Box<dyn Error>> {
+    let mut transaction = Transaction::new();
+
+    for (handle, target) in pool.gather(&|container| container.has(&DAILY_DAMAGE)) {
+        let new_durability = target.get(&DURABILITY)? - target.get(&DAILY_DAMAGE)?;
+        transaction.add(AttributeModification::new(handle, &DURABILITY, new_durability));
+    }
+
+    Ok(transaction)
 }
 
 fn do_things(pool: &mut Pool, tank_handle: Handle) -> Result<Transaction, Box<dyn Error>> {
@@ -189,8 +261,29 @@ fn do_things(pool: &mut Pool, tank_handle: Handle) -> Result<Transaction, Box<dy
 
     transaction.add(AttributeModification::new(tank_handle, &DURABILITY, tank.get(&DURABILITY)? + 1));
     transaction.add(AttributeModification::new(tank_handle, &PLAYER, player_handle));
+    transaction.add(AttributeModification::new(tank_handle, &DAILY_DAMAGE, 1));
 
     Ok(transaction)
+}
+
+fn dump(pool: &mut Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
+    let tank= pool.get_attribute_container(tank_handle)?;
+    println!("\n===== Tank =====");
+    dump_ctr(tank);
+
+    println!("\n===== Player =====");
+    let player_handle = *tank.get(&PLAYER)?;
+    let player = pool.get_attribute_container(player_handle)?;
+    dump_ctr(player);
+
+    Ok(())
+}
+
+fn dump_ctr(attribute_container: &AttributeContainer) {
+    let mut visitor = AttributeVisitor::new();
+    visitor.add_visitor(&|name, num: u32| println!("{} = {}", name, num));
+    visitor.add_visitor(&|name, handle: Handle| println!("{} = {:?}", name, handle));
+    attribute_container.visit_all(visitor);
 }
 
 fn run_code() -> Result<(), Box<dyn Error>> {
@@ -205,12 +298,12 @@ fn run_code() -> Result<(), Box<dyn Error>> {
     let transaction = do_things(&mut pool, tank_handle)?;
     transaction.apply(&mut pool)?;
 
-    let tank= pool.get_attribute_container(tank_handle)?;
-    println!("Tank: durability = {}", tank.get(&DURABILITY)?);
+    dump(&mut pool, tank_handle)?;
+    println!("----------------------------");
 
-    let player_handle = *tank.get(&PLAYER)?;
-    let player = pool.get_attribute_container(player_handle)?;
-    println!("Player: durability = {}", player.get(&DURABILITY)?);
+    damage_all(&mut pool)?.apply(&mut pool)?;
+
+    dump(&mut pool, tank_handle)?;
 
     Ok(())
 }
