@@ -76,46 +76,36 @@ impl AttributeContainer {
     }
 }
 
-struct AttributeVisitorConcrete<T: 'static + Clone> {
-    callback: &'static dyn Fn(&'static str, T),
+struct AttributeVisitor<'a> {
+    visitors: HashMap<TypeId, &'a dyn Fn(&'static str, &dyn Any)>,
 }
 
-trait AttributeVisitorTrait {
-    fn call(&self, name: &'static str, value: &dyn Any);
-}
-
-impl<T: 'static + Clone> AttributeVisitorTrait for AttributeVisitorConcrete<T> {
-    fn call(&self, name: &'static str, value: &dyn Any) {
-        match value.downcast_ref::<T>() {
-            Some(value) => (self.callback)(name, value.clone()),
-            None => panic!("Not allowed"),
-        }
-    }
-}
-
-struct AttributeVisitor {
-    visitors: HashMap<TypeId, Box<dyn AttributeVisitorTrait>>,
-}
-
-impl AttributeVisitor {
-    fn new() -> AttributeVisitor {
+impl<'a> AttributeVisitor<'a> {
+    fn new() -> AttributeVisitor<'a> {
         AttributeVisitor {
             visitors: HashMap::new(),
         }
     }
 
-    fn add_visitor<T: 'static + Clone, F: Fn(&'static str, T) + 'static>(&mut self, visitor_fn: &'static F) {
-        self.visitors.insert(TypeId::of::<T>(), Box::new(AttributeVisitorConcrete {
-            callback: visitor_fn,
-        }));
+    fn add_visitor<T: 'static + Clone>(&mut self, visitor_fn: &'a dyn Fn(&'static str, &dyn Any)) {
+        self.visitors.insert(TypeId::of::<T>(), visitor_fn);
     }
 
     fn visit(&self, name: &'static str, value: &dyn Any) {
         match self.visitors.get(&value.type_id()) {
             Some(visitor) => {
-                visitor.call(name, value);
+                visitor(name, value);
             },
             None => panic!("Bad {}", name),
+        }
+    }
+}
+
+fn make_visitor<T: 'static + Clone>(visitor_fn: impl Fn(&'static str, T)) -> impl Fn(&'static str, &dyn Any) {
+    move |name, value: &dyn Any| {
+        match value.downcast_ref::<T>() {
+            Some(value) => visitor_fn(name, value.clone()),
+            None => panic!("Not allowed"),
         }
     }
 }
@@ -266,23 +256,40 @@ fn do_things(pool: &mut Pool, tank_handle: Handle) -> Result<Transaction, Box<dy
     Ok(transaction)
 }
 
-fn dump(pool: &mut Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
+fn dump(pool: &Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
     let tank= pool.get_attribute_container(tank_handle)?;
     println!("\n===== Tank =====");
-    dump_ctr(tank);
+    dump_ctr(pool, tank);
 
     println!("\n===== Player =====");
     let player_handle = *tank.get(&PLAYER)?;
     let player = pool.get_attribute_container(player_handle)?;
-    dump_ctr(player);
+    dump_ctr(pool, player);
 
     Ok(())
 }
 
-fn dump_ctr(attribute_container: &AttributeContainer) {
+fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) {
     let mut visitor = AttributeVisitor::new();
-    visitor.add_visitor(&|name, num: u32| println!("{} = {}", name, num));
-    visitor.add_visitor(&|name, handle: Handle| println!("{} = {:?}", name, handle));
+    let cb1 = make_visitor(|name, num: u32| println!("{} = {}", name, num));
+    let cb2 = make_visitor(|name, handle: Handle| {
+
+        match pool.get_attribute_container(handle) {
+            Ok(container) => {
+                println!("{} = [", name);
+                dump_ctr(pool, container);
+                println!("]");
+            },
+            Err(_) => {
+                println!("{} = Error: Failed to get handle {:?}", name, handle);
+            }
+        }
+
+        println!("{} = {:?}", name, handle);
+    });
+
+    visitor.add_visitor::<u32>(&cb1);
+    visitor.add_visitor::<Handle>(&cb2);
     attribute_container.visit_all(visitor);
 }
 
