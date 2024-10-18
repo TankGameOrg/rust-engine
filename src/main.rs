@@ -69,63 +69,79 @@ impl AttributeContainer {
         self.attributes.contains_key(key.name)
     }
 
-    fn visit_all(&self, visitor: AttributeVisitor) {
+    fn visit_all(&self, visitor: &dyn GenericAttributeVisitor) {
         for (attribute, value) in &self.attributes {
             visitor.visit(attribute, value.as_ref());
         }
     }
 }
 
-struct AttributeVisitor<'a> {
-    visitors: HashMap<TypeId, &'a dyn Visitor>,
+struct CombinedVisitor<'a> {
+    visitors: HashMap<TypeId, &'a dyn GenericAttributeVisitor>,
 }
 
-impl<'a> AttributeVisitor<'a> {
-    fn new() -> AttributeVisitor<'a> {
-        AttributeVisitor {
+impl<'a> CombinedVisitor<'a> {
+    fn new() -> CombinedVisitor<'a> {
+        CombinedVisitor {
             visitors: HashMap::new(),
         }
     }
 
-    fn add_visitor<T: 'static + Clone, F: Fn(&'static str, T)>(&mut self, visitor: &'a TypedVisitor<T, F>) {
+    fn add_visitor<T: 'static + Clone, F: Fn(&'static str, T)>(&mut self, visitor: &'a AttributeVisitor<T, F>) {
         self.visitors.insert(TypeId::of::<T>(), visitor);
     }
+}
 
+impl<'a> GenericAttributeVisitor for CombinedVisitor<'a> {
     fn visit(&self, name: &'static str, value: &dyn Any) {
         match self.visitors.get(&value.type_id()) {
             Some(visitor) => {
-                visitor.call(name, value);
+                visitor.visit(name, value);
             },
             None => panic!("Bad {}", name),
         }
     }
 }
 
-trait Visitor {
-    fn call(&self, name: &'static str, value: &dyn Any);
+trait GenericAttributeVisitor {
+    fn visit(&self, name: &'static str, value: &dyn Any);
 }
 
-struct TypedVisitor<T: 'static + Clone, F: Fn(&'static str, T)> {
+struct AttributeVisitor<T: 'static + Clone, F: Fn(&'static str, T)> {
     visitor_fn: F,
     phantom: PhantomData<T>,
 }
 
-impl<T: 'static + Clone, F: Fn(&'static str, T)> TypedVisitor<T, F> {
-    fn new(visitor_fn: F) -> TypedVisitor<T, F> {
-        TypedVisitor {
+impl<T: 'static + Clone, F: Fn(&'static str, T)> AttributeVisitor<T, F> {
+    fn new(visitor_fn: F) -> AttributeVisitor<T, F> {
+        AttributeVisitor {
             visitor_fn,
             phantom: PhantomData,
         }
     }
 }
 
-impl<T: 'static + Clone, F: Fn(&'static str, T)> Visitor for TypedVisitor<T, F> {
-    fn call(&self, name: &'static str, value: &dyn Any) {
+impl<T: 'static + Clone, F: Fn(&'static str, T)> GenericAttributeVisitor for AttributeVisitor<T, F> {
+    fn visit(&self, name: &'static str, value: &dyn Any) {
         match value.downcast_ref::<T>() {
             Some(value) => (self.visitor_fn)(name, value.clone()),
             None => panic!("Not allowed"),
         }
     }
+}
+
+macro_rules! combine_visitors {
+    ($($visitor:ident),+) => {
+        {
+            let mut visitor_set = CombinedVisitor::new();
+
+            $(
+                visitor_set.add_visitor(&$visitor);
+            )+
+
+            visitor_set
+        }
+    };
 }
 
 trait Modification {
@@ -288,9 +304,8 @@ fn dump(pool: &Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
 }
 
 fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) {
-    let mut visitor = AttributeVisitor::new();
-    let cb1 = TypedVisitor::new(|name, num: u32| println!("{} = {}", name, num));
-    let cb2 = TypedVisitor::new(|name, handle: Handle| {
+    let cb1 = AttributeVisitor::new(|name, num: u32| println!("{} = {}", name, num));
+    let cb2 = AttributeVisitor::new(|name, handle: Handle| {
 
         match pool.get_attribute_container(handle) {
             Ok(container) => {
@@ -306,9 +321,7 @@ fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) {
         println!("{} = {:?}", name, handle);
     });
 
-    visitor.add_visitor(&cb1);
-    visitor.add_visitor(&cb2);
-    attribute_container.visit_all(visitor);
+    attribute_container.visit_all(&combine_visitors!(cb1, cb2));
 }
 
 fn run_code() -> Result<(), Box<dyn Error>> {
