@@ -77,7 +77,7 @@ impl AttributeContainer {
 }
 
 struct AttributeVisitor<'a> {
-    visitors: HashMap<TypeId, &'a dyn Fn(&'static str, &dyn Any)>,
+    visitors: HashMap<TypeId, &'a dyn Visitor>,
 }
 
 impl<'a> AttributeVisitor<'a> {
@@ -87,24 +87,42 @@ impl<'a> AttributeVisitor<'a> {
         }
     }
 
-    fn add_visitor<T: 'static + Clone>(&mut self, visitor_fn: &'a dyn Fn(&'static str, &dyn Any)) {
-        self.visitors.insert(TypeId::of::<T>(), visitor_fn);
+    fn add_visitor<T: 'static + Clone, F: Fn(&'static str, T)>(&mut self, visitor: &'a TypedVisitor<T, F>) {
+        self.visitors.insert(TypeId::of::<T>(), visitor);
     }
 
     fn visit(&self, name: &'static str, value: &dyn Any) {
         match self.visitors.get(&value.type_id()) {
             Some(visitor) => {
-                visitor(name, value);
+                visitor.call(name, value);
             },
             None => panic!("Bad {}", name),
         }
     }
 }
 
-fn make_visitor<T: 'static + Clone>(visitor_fn: impl Fn(&'static str, T)) -> impl Fn(&'static str, &dyn Any) {
-    move |name, value: &dyn Any| {
+trait Visitor {
+    fn call(&self, name: &'static str, value: &dyn Any);
+}
+
+struct TypedVisitor<T: 'static + Clone, F: Fn(&'static str, T)> {
+    visitor_fn: F,
+    phantom: PhantomData<T>,
+}
+
+impl<T: 'static + Clone, F: Fn(&'static str, T)> TypedVisitor<T, F> {
+    fn new(visitor_fn: F) -> TypedVisitor<T, F> {
+        TypedVisitor {
+            visitor_fn,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: 'static + Clone, F: Fn(&'static str, T)> Visitor for TypedVisitor<T, F> {
+    fn call(&self, name: &'static str, value: &dyn Any) {
         match value.downcast_ref::<T>() {
-            Some(value) => visitor_fn(name, value.clone()),
+            Some(value) => (self.visitor_fn)(name, value.clone()),
             None => panic!("Not allowed"),
         }
     }
@@ -271,8 +289,8 @@ fn dump(pool: &Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
 
 fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) {
     let mut visitor = AttributeVisitor::new();
-    let cb1 = make_visitor(|name, num: u32| println!("{} = {}", name, num));
-    let cb2 = make_visitor(|name, handle: Handle| {
+    let cb1 = TypedVisitor::new(|name, num: u32| println!("{} = {}", name, num));
+    let cb2 = TypedVisitor::new(|name, handle: Handle| {
 
         match pool.get_attribute_container(handle) {
             Ok(container) => {
@@ -288,8 +306,8 @@ fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) {
         println!("{} = {:?}", name, handle);
     });
 
-    visitor.add_visitor::<u32>(&cb1);
-    visitor.add_visitor::<Handle>(&cb2);
+    visitor.add_visitor(&cb1);
+    visitor.add_visitor(&cb2);
     attribute_container.visit_all(visitor);
 }
 
