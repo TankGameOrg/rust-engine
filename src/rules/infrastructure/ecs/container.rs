@@ -46,31 +46,3 @@ impl AttributeContainer {
         Ok(())
     }
 }
-
-#[macro_export]
-macro_rules! make_visitor {
-    ($(($var_attribute_name:ident, $var_name:ident: $attribute_type:ty) => $code:expr),+) => {
-        |attribute_name: &'static str, any_attribute_value: &dyn std::any::Any| -> Result<(), Box<dyn Error>> {
-            let attribute_type_id = any_attribute_value.type_id();
-            let mut attribute_value_handled = false;
-
-            $(
-                if attribute_type_id == std::any::TypeId::of::<$attribute_type>() {
-                    let $var_attribute_name = attribute_name;
-                    attribute_value_handled = true;
-
-                    match any_attribute_value.downcast_ref::<$attribute_type>() {
-                        Some($var_name) => $code,
-                        None => panic!("Not allowed"),
-                    }
-                }
-            )+
-
-            if !attribute_value_handled {
-                Err(Box::new(crate::rules::infrastructure::error::RuleError::Generic(format!("No case found for type: {:?}", attribute_type_id))))
-            } else {
-                Ok(())
-            }
-        }
-    };
-}

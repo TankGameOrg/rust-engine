@@ -53,22 +53,24 @@ fn dump(pool: &Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
 }
 
 fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) -> Result<(), Box<dyn Error>> {
-    attribute_container.visit_all(&make_visitor! {
-        (name, num: u32) => println!("{} = {}", name, num),
-        (name, handle: Handle) => {
-            match pool.get_attribute_container(*handle) {
-                Ok(container) => {
-                    println!("{} = [", name);
-                    dump_ctr(pool, container)?;
-                    println!("]");
-                },
-                Err(_) => {
-                    println!("{} = Error: Failed to get handle {:?}", name, handle);
+    attribute_container.visit_all(&|name, attribute_value| {
+        match_type!(attribute_value, {
+            num: u32 => println!("{} = {}", name, num),
+            handle: Handle => {
+                match pool.get_attribute_container(*handle) {
+                    Ok(container) => {
+                        println!("{} = [", name);
+                        dump_ctr(pool, container)?;
+                        println!("]");
+                    },
+                    Err(_) => {
+                        println!("{} = Error: Failed to get handle {:?}", name, handle);
+                    }
                 }
-            }
 
-            println!("{} = {:?}", name, handle);
-        }
+                println!("{} = {:?}", name, handle);
+            }
+        })
     })
 }
 
