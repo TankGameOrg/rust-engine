@@ -69,77 +69,38 @@ impl AttributeContainer {
         self.attributes.contains_key(key.name)
     }
 
-    fn visit_all(&self, visitor: &dyn GenericAttributeVisitor) {
+    fn visit_all(&self, visitor: &dyn Fn(&'static str, &dyn Any) -> Result<(), Box<dyn Error>>) -> Result<(), Box<dyn Error>> {
         for (attribute, value) in &self.attributes {
-            visitor.visit(attribute, value.as_ref());
+            (visitor)(attribute, value.as_ref())?;
         }
+
+        Ok(())
     }
 }
 
-struct CombinedVisitor<'a> {
-    visitors: HashMap<TypeId, &'a dyn GenericAttributeVisitor>,
-}
-
-impl<'a> CombinedVisitor<'a> {
-    fn new() -> CombinedVisitor<'a> {
-        CombinedVisitor {
-            visitors: HashMap::new(),
-        }
-    }
-
-    fn add_visitor<T: 'static + Clone, F: Fn(&'static str, T)>(&mut self, visitor: &'a AttributeVisitor<T, F>) {
-        self.visitors.insert(TypeId::of::<T>(), visitor);
-    }
-}
-
-impl<'a> GenericAttributeVisitor for CombinedVisitor<'a> {
-    fn visit(&self, name: &'static str, value: &dyn Any) {
-        match self.visitors.get(&value.type_id()) {
-            Some(visitor) => {
-                visitor.visit(name, value);
-            },
-            None => panic!("Bad {}", name),
-        }
-    }
-}
-
-trait GenericAttributeVisitor {
-    fn visit(&self, name: &'static str, value: &dyn Any);
-}
-
-struct AttributeVisitor<T: 'static + Clone, F: Fn(&'static str, T)> {
-    visitor_fn: F,
-    phantom: PhantomData<T>,
-}
-
-impl<T: 'static + Clone, F: Fn(&'static str, T)> AttributeVisitor<T, F> {
-    fn new(visitor_fn: F) -> AttributeVisitor<T, F> {
-        AttributeVisitor {
-            visitor_fn,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: 'static + Clone, F: Fn(&'static str, T)> GenericAttributeVisitor for AttributeVisitor<T, F> {
-    fn visit(&self, name: &'static str, value: &dyn Any) {
-        match value.downcast_ref::<T>() {
-            Some(value) => (self.visitor_fn)(name, value.clone()),
-            None => panic!("Not allowed"),
-        }
-    }
-}
-
-macro_rules! combine_visitors {
-    ($($visitor:ident),+) => {
-        {
-            let mut visitor_set = CombinedVisitor::new();
+macro_rules! make_visitor {
+    ($(($var_attribute_name:ident, $var_name:ident: $attribute_type:ty) => $code:expr),+) => {
+        |attribute_name: &'static str, any_attribute_value: &dyn Any| -> Result<(), Box<dyn Error>> {
+            let attribute_type_id = any_attribute_value.type_id();
+            let mut attribute_value_handled = false;
 
             $(
-                visitor_set.add_visitor(&$visitor);
+                if attribute_type_id == TypeId::of::<$attribute_type>() {
+                    let $var_attribute_name = attribute_name;
+                    attribute_value_handled = true;
+
+                    match any_attribute_value.downcast_ref::<$attribute_type>() {
+                        Some($var_name) => $code,
+                        None => panic!("Not allowed"),
+                    }
+                }
             )+
 
-            visitor_set
+            if !attribute_value_handled {
+                Err(Box::new(BasicError(format!("No case found for type: {:?}", attribute_type_id))))
+            } else {
+                Ok(())
+            }
         }
     };
 }
@@ -293,35 +254,34 @@ fn do_things(pool: &mut Pool, tank_handle: Handle) -> Result<Transaction, Box<dy
 fn dump(pool: &Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
     let tank= pool.get_attribute_container(tank_handle)?;
     println!("\n===== Tank =====");
-    dump_ctr(pool, tank);
+    dump_ctr(pool, tank)?;
 
     println!("\n===== Player =====");
     let player_handle = *tank.get(&PLAYER)?;
     let player = pool.get_attribute_container(player_handle)?;
-    dump_ctr(pool, player);
+    dump_ctr(pool, player)?;
 
     Ok(())
 }
 
-fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) {
-    let cb1 = AttributeVisitor::new(|name, num: u32| println!("{} = {}", name, num));
-    let cb2 = AttributeVisitor::new(|name, handle: Handle| {
-
-        match pool.get_attribute_container(handle) {
-            Ok(container) => {
-                println!("{} = [", name);
-                dump_ctr(pool, container);
-                println!("]");
-            },
-            Err(_) => {
-                println!("{} = Error: Failed to get handle {:?}", name, handle);
+fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) -> Result<(), Box<dyn Error>> {
+    attribute_container.visit_all(&make_visitor! {
+        (name, num: u32) => println!("{} = {}", name, num),
+        (name, handle: Handle) => {
+            match pool.get_attribute_container(*handle) {
+                Ok(container) => {
+                    println!("{} = [", name);
+                    dump_ctr(pool, container)?;
+                    println!("]");
+                },
+                Err(_) => {
+                    println!("{} = Error: Failed to get handle {:?}", name, handle);
+                }
             }
+
+            println!("{} = {:?}", name, handle);
         }
-
-        println!("{} = {:?}", name, handle);
-    });
-
-    attribute_container.visit_all(&combine_visitors!(cb1, cb2));
+    })
 }
 
 fn run_code() -> Result<(), Box<dyn Error>> {
