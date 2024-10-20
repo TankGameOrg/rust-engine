@@ -44,7 +44,7 @@ impl AddContainerModification {
 
 impl Modification for AddContainerModification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        pool.add_attribute_container(self.handle, AttributeContainer::new());
+        pool.add_attribute_container_with_handle(self.handle, AttributeContainer::new());
         Ok(())
     }
 }
@@ -73,7 +73,6 @@ impl Transaction {
     }
 }
 
-
 #[macro_export]
 macro_rules! create_container {
     ($transaction:expr, { $($attribute:ident = $value:expr),+ }) => {
@@ -93,7 +92,6 @@ macro_rules! create_container {
         }
     };
 }
-
 
 #[macro_export]
 macro_rules! modify_container {
