@@ -1,5 +1,11 @@
 use std::marker::PhantomData;
 
+use as_any::AsAny;
+
+pub trait AttributeValue: AsAny + std::fmt::Debug {}
+
+impl AttributeValue for u32 {}
+
 /// An attribute that can be used to access/store data on an entity
 ///
 /// Each attribute has a name and value type.  For example we can
@@ -8,18 +14,18 @@ use std::marker::PhantomData;
 /// let speed = Attribute<u32>::new("speed");
 /// ```
 #[derive(Hash, Eq, Debug)]
-pub struct Attribute<ValueType> {
+pub struct Attribute<ValueType: AttributeValue> {
     name: &'static str,
     phantom: PhantomData<ValueType>,
 }
 
-impl<ValueType> PartialEq for Attribute<ValueType> {
+impl<ValueType: AttributeValue> PartialEq for Attribute<ValueType> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl<ValueType> Attribute<ValueType> {
+impl<ValueType: AttributeValue> Attribute<ValueType> {
     /// Create a new attribute with the specified name
     #[inline]
     pub const fn new(name: &'static str) -> Attribute<ValueType> {

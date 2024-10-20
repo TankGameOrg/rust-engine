@@ -2,25 +2,22 @@ use std::{collections::HashMap, error::Error};
 
 use crate::rules::infrastructure::error::RuleError;
 
-use super::container::AttributeContainer;
+use super::{attribute::AttributeValue, container::AttributeContainer};
 
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
-pub struct Handle {
-    handle: u32,
-}
+pub struct Handle(u32);
 
 static mut NEXT_HANDLE: u32 = 0;
 
 impl Handle {
     pub(super) fn new() -> Handle {
-        Handle {
-            handle: unsafe { NEXT_HANDLE += 1; NEXT_HANDLE },
-        }
+        Handle(unsafe { NEXT_HANDLE += 1; NEXT_HANDLE })
     }
 }
 
-#[derive(Debug)]
+impl AttributeValue for Handle {}
+
 pub struct Pool {
     containers: HashMap<Handle, AttributeContainer>
 }
@@ -50,5 +47,12 @@ impl Pool {
         self.containers.iter()
             .filter(|(_, container)| predicate(*container))
             .map(|(handle, container)| (*handle, container))
+    }
+}
+
+impl std::fmt::Debug for Pool {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Pool ")?;
+        self.containers.fmt(f)
     }
 }

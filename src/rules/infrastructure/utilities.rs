@@ -2,6 +2,8 @@
 macro_rules! match_type {
     ($any_var:ident, { $( $var_name:ident: $type:ty => $code:expr ),+ }) => {
         {
+            use as_any::Downcast;
+
             let type_id = $any_var.type_id();
             let mut value_handled = false;
 
@@ -9,7 +11,7 @@ macro_rules! match_type {
                 if type_id == std::any::TypeId::of::<$type>() {
                     value_handled = true;
 
-                    match $any_var.downcast_ref::<$type>() {
+                    match $any_var.as_ref().downcast_ref::<$type>() {
                         Some($var_name) => $code,
                         None => panic!("The TypeId of {} matched {} but failed to downcast", stringify!($any_var), stringify!($type)),
                     }

@@ -1,18 +1,18 @@
 use std::error::Error;
 
-use super::{attribute::Attribute, container::AttributeContainer, pool::{Handle, Pool}};
+use super::{attribute::{Attribute, AttributeValue}, container::AttributeContainer, pool::{Handle, Pool}};
 
 pub trait Modification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>>;
 }
 
-pub struct AttributeModification<T: 'static + Clone> {
+pub struct AttributeModification<T: AttributeValue> {
     handle: Handle,
     attribute: &'static Attribute<T>,
     new_value: T
 }
 
-impl<T: 'static + Clone> AttributeModification<T> {
+impl<T: AttributeValue + Clone> AttributeModification<T> {
     pub fn new(handle: Handle, attribute: &'static Attribute<T>, new_value: T) -> AttributeModification<T> {
         AttributeModification {
             handle,
@@ -22,7 +22,7 @@ impl<T: 'static + Clone> AttributeModification<T> {
     }
 }
 
-impl<T: 'static + Clone> Modification for AttributeModification<T> {
+impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
         pool.get_attribute_container_mut(self.handle)?.set(self.attribute, self.new_value.clone());
         Ok(())
