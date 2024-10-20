@@ -53,7 +53,7 @@ fn dump(pool: &Pool, tank_handle: Handle) -> Result<(), Box<dyn Error>> {
 }
 
 fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) -> Result<(), Box<dyn Error>> {
-    attribute_container.visit_all(&|name, attribute_value| {
+    for (name, attribute_value) in attribute_container.iter() {
         match_type!(attribute_value, {
             num: u32 => println!("{} = {}", name, num),
             handle: Handle => {
@@ -70,8 +70,10 @@ fn dump_ctr(pool: &Pool, attribute_container: &AttributeContainer) -> Result<(),
 
                 println!("{} = {:?}", name, handle);
             }
-        })
-    })
+        })?
+    }
+
+    Ok(())
 }
 
 fn run_code() -> Result<(), Box<dyn Error>> {
@@ -92,6 +94,10 @@ fn run_code() -> Result<(), Box<dyn Error>> {
     damage_all(&mut pool)?.apply(&mut pool)?;
 
     dump(&mut pool, tank_handle)?;
+
+    println!("----------------------------");
+
+    println!("{:?}", pool);
 
     Ok(())
 }

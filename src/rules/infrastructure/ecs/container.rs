@@ -38,11 +38,9 @@ impl AttributeContainer {
         self.attributes.contains_key(key.get_name())
     }
 
-    pub fn visit_all(&self, visitor: &dyn Fn(&'static str, &dyn Any) -> Result<(), Box<dyn Error>>) -> Result<(), Box<dyn Error>> {
-        for (attribute, value) in &self.attributes {
-            (visitor)(attribute, value.as_ref())?;
-        }
-
-        Ok(())
+    // TODO: Proper IntoIter
+    pub fn iter(&self) -> impl Iterator<Item=(&&'static str, &Box<dyn Any>)> {
+        self.attributes.iter()
     }
 }
+
