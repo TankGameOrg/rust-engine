@@ -80,7 +80,11 @@ impl<ValueType: AttributeValue> Attribute<ValueType> {
 #[macro_export]
 macro_rules! attribute {
     ($name:ident: $type:ty) => {
-        static $name: $crate::rules::infrastructure::attribute::Attribute<$type> =
+        pub static $name: $crate::rules::infrastructure::attribute::Attribute<$type> =
             $crate::rules::infrastructure::attribute::Attribute::new(stringify!($name));
     };
 }
+
+// A basic attribute for writing unit tests
+#[cfg(test)]
+attribute!(DUMMY_ATTRIBUTE: u32);

@@ -87,3 +87,21 @@ impl std::fmt::Debug for Pool {
         self.containers.fmt(f)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::rules::infrastructure::{attribute::DUMMY_ATTRIBUTE, container::AttributeContainer};
+
+    use super::Pool;
+
+    #[test]
+    fn pool_can_store_a_container() {
+        let mut pool = Pool::new();
+        let mut container = AttributeContainer::new();
+        container.set(&DUMMY_ATTRIBUTE, 2);
+        let handle = pool.add_attribute_container(container);
+
+        let container = pool.get_attribute_container(handle).unwrap();
+        assert_eq!(*container.get(&DUMMY_ATTRIBUTE).unwrap(), 2);
+    }
+}

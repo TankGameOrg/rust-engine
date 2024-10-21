@@ -58,6 +58,12 @@ impl AttributeContainer {
         self.attributes.contains_key(key.get_name())
     }
 
+    /// Remove an attribute from this container
+    #[inline]
+    pub fn remove<T: AttributeValue>(&mut self, key: &Attribute<T>) {
+        self.attributes.remove(&key.get_name());
+    }
+
     /// Iterate the attributes stored in the container
     // TODO: Proper IntoIter
     #[inline]
@@ -70,5 +76,55 @@ impl std::fmt::Debug for AttributeContainer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("AttributeContainer ")?;
         self.attributes.fmt(f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use core::panic;
+
+    use crate::rules::infrastructure::{attribute::DUMMY_ATTRIBUTE, error::RuleError};
+
+    use super::AttributeContainer;
+
+    #[test]
+    fn can_get_and_set_basic_attributes() {
+        let mut container = AttributeContainer::new();
+        container.set(&DUMMY_ATTRIBUTE, 123);
+        assert_eq!(*container.get(&DUMMY_ATTRIBUTE).unwrap(), 123);
+    }
+
+    #[test]
+    fn can_check_if_an_attribute_exists() {
+        let mut container = AttributeContainer::new();
+        assert!(!container.has(&DUMMY_ATTRIBUTE));
+        container.set(&DUMMY_ATTRIBUTE, 5);
+        assert!(container.has(&DUMMY_ATTRIBUTE));
+    }
+
+    #[test]
+    fn can_remove_an_attribute() {
+        let mut container = AttributeContainer::new();
+        container.set(&DUMMY_ATTRIBUTE, 4);
+        assert!(container.has(&DUMMY_ATTRIBUTE));
+        container.remove(&DUMMY_ATTRIBUTE);
+        assert!(!container.has(&DUMMY_ATTRIBUTE));
+    }
+
+    #[test]
+    fn getting_a_missing_attribute_returns_error() {
+        let container = AttributeContainer::new();
+
+        match container.get(&DUMMY_ATTRIBUTE) {
+            Ok(_) => panic!("Result can't be ok"),
+            Err(err) => {
+                if let Some(RuleError::AttributeNotFound { name }) = err.downcast_ref::<RuleError>() {
+                    assert_eq!(*name, "DUMMY_ATTRIBUTE");
+                }
+                else {
+                    panic!("Error should be AttributeNotFound but got {:?}", err);
+                }
+            }
+        }
     }
 }
