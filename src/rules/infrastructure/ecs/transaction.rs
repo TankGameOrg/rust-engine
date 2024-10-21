@@ -91,9 +91,9 @@ impl Transaction {
 /// # use tank_game::rules::infrastructure::ecs::transaction::Transaction;
 /// # use tank_game::create_container;
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
-///
+/// #
 /// let mut transaction = Transaction::new();
-/// let _new_handle = create_container!(&mut transaction, {
+/// let new_handle = create_container!(&mut transaction, {
 ///     dummy_attribute = 3
 /// });
 /// ```
@@ -126,7 +126,7 @@ macro_rules! create_container {
 /// # use tank_game::rules::infrastructure::ecs::transaction::Transaction;
 /// # use tank_game::{create_container,modify_container};
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
-///
+/// #
 /// let mut transaction = Transaction::new();
 /// # let dummy_handle = create_container!(&mut transaction, { dummy_attribute = 3 });
 /// modify_container!(&mut transaction, dummy_handle, {

@@ -1,4 +1,4 @@
-/// Match a generic type to one of several base types and run the applicable branch
+/// Match and downcast a generic type to one of several base types
 ///
 /// ```
 /// # use tank_game::rules::infrastructure::ecs::attribute::AttributeValue;

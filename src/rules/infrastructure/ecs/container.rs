@@ -12,11 +12,11 @@ use super::attribute::{Attribute, AttributeValue};
 /// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
 /// # use tank_game::rules::infrastructure::ecs::container::AttributeContainer;
 /// # let dummy_attribute = Attribute::<u32>::new("dummy_attribute");
-///
+/// #
 /// let mut container = AttributeContainer::new();
 /// container.set(&dummy_attribute, 2);
 /// assert_eq!(*container.get(&dummy_attribute)?, 2);
-///
+/// #
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AttributeContainer {
