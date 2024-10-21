@@ -87,8 +87,8 @@ impl Transaction {
 /// Add the modifications required to create and initialize an attribute container to the given transaction
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
-/// # use tank_game::rules::infrastructure::ecs::transaction::Transaction;
+/// # use tank_game::rules::infrastructure::attribute::Attribute;
+/// # use tank_game::rules::infrastructure::transaction::Transaction;
 /// # use tank_game::create_container;
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
@@ -103,9 +103,9 @@ macro_rules! create_container {
         {
             use $crate::modify_container;
 
-            let transaction: &mut $crate::rules::infrastructure::ecs::transaction::Transaction = $transaction;
+            let transaction: &mut $crate::rules::infrastructure::transaction::Transaction = $transaction;
 
-            let (handle, new_container_modification) = $crate::rules::infrastructure::ecs::transaction::AddContainerModification::new();
+            let (handle, new_container_modification) = $crate::rules::infrastructure::transaction::AddContainerModification::new();
             transaction.add(new_container_modification);
 
             modify_container!(transaction, handle, {
@@ -122,8 +122,8 @@ macro_rules! create_container {
 /// A helper for creating modifications to an attribute container
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
-/// # use tank_game::rules::infrastructure::ecs::transaction::Transaction;
+/// # use tank_game::rules::infrastructure::attribute::Attribute;
+/// # use tank_game::rules::infrastructure::transaction::Transaction;
 /// # use tank_game::{create_container,modify_container};
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
@@ -137,10 +137,10 @@ macro_rules! create_container {
 macro_rules! modify_container {
     ($transaction:expr, $handle:expr, { $($attribute:ident = $value:expr),+ }) => {
         {
-            let transaction: &mut $crate::rules::infrastructure::ecs::transaction::Transaction = $transaction;
+            let transaction: &mut $crate::rules::infrastructure::transaction::Transaction = $transaction;
 
             $(
-                transaction.add($crate::rules::infrastructure::ecs::transaction::AttributeModification::new($handle, &$attribute, $value));
+                transaction.add($crate::rules::infrastructure::transaction::AttributeModification::new($handle, &$attribute, $value));
             )+
         }
     };

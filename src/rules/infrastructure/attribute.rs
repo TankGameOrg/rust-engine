@@ -19,12 +19,12 @@ impl AttributeValue for u32 {}
 /// Each attribute has a name and value type.  For example we can
 /// create an attribute called speed that stores a u32
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
+/// # use tank_game::rules::infrastructure::attribute::Attribute;
 /// let speed = Attribute::<u32>::new("speed");
 /// ```
 /// or define an attribute that holds a struct
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::attribute::{Attribute,AttributeValue};
+/// # use tank_game::rules::infrastructure::attribute::{Attribute,AttributeValue};
 /// #[derive(Debug)]
 /// enum PetType {
 ///     Cat,
@@ -80,7 +80,7 @@ impl<ValueType: AttributeValue> Attribute<ValueType> {
 #[macro_export]
 macro_rules! attribute {
     ($name:ident: $type:ty) => {
-        static $name: $crate::rules::infrastructure::ecs::attribute::Attribute<$type> =
-            $crate::rules::infrastructure::ecs::attribute::Attribute::new(stringify!($name));
+        static $name: $crate::rules::infrastructure::attribute::Attribute<$type> =
+            $crate::rules::infrastructure::attribute::Attribute::new(stringify!($name));
     };
 }

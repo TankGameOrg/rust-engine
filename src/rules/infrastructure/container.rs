@@ -2,15 +2,14 @@ use std::{any::{Any, TypeId}, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
-use crate::rules::infrastructure::error::RuleError;
-
+use super::error::RuleError;
 use super::attribute::{Attribute, AttributeValue};
 
 /// A generic container for storing keys of different types
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
-/// # use tank_game::rules::infrastructure::ecs::container::AttributeContainer;
+/// # use tank_game::rules::infrastructure::attribute::Attribute;
+/// # use tank_game::rules::infrastructure::container::AttributeContainer;
 /// # let dummy_attribute = Attribute::<u32>::new("dummy_attribute");
 /// #
 /// let mut container = AttributeContainer::new();

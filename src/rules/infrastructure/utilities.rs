@@ -1,8 +1,8 @@
 /// Match and downcast a generic type to one of several base types
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::attribute::AttributeValue;
-/// # use tank_game::rules::infrastructure::ecs::pool::Handle;
+/// # use tank_game::rules::infrastructure::attribute::AttributeValue;
+/// # use tank_game::rules::infrastructure::pool::Handle;
 /// # use tank_game::match_type;
 /// let value: u32 = 3;
 /// let attribute_value: &dyn AttributeValue = &value;
