@@ -1,12 +1,14 @@
 /// Match a generic type to one of several base types and run the applicable branch
 ///
 /// ```
-/// # use crate::rules::infrastructure::ecs::attribute::AttributeValue;
-/// let value = 3u32;
+/// # use tank_game::rules::infrastructure::ecs::attribute::AttributeValue;
+/// # use tank_game::rules::infrastructure::ecs::pool::Handle;
+/// # use tank_game::match_type;
+/// let value: u32 = 3;
 /// let attribute_value: &dyn AttributeValue = &value;
 /// match_type!(attribute_value, {
-///     value: u32 => assert_eq!(value, 2),
-///     _: u8 => panic!("This branch won't be called")
+///     value: u32 => assert_eq!(*value, 3),
+///     _unused: Handle => panic!("This branch won't be called")
 /// });
 /// ```
 #[macro_export]

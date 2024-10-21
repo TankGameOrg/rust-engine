@@ -87,16 +87,22 @@ impl Transaction {
 /// Add the modifications required to create and initialize an attribute container to the given transaction
 ///
 /// ```
-/// # let dummy_attribute = Attribute<u32>::new();
+/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
+/// # use tank_game::rules::infrastructure::ecs::transaction::Transaction;
+/// # use tank_game::create_container;
+/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+///
 /// let mut transaction = Transaction::new();
 /// let _new_handle = create_container!(&mut transaction, {
-///     dummy_attribute = 3,
+///     dummy_attribute = 3
 /// });
 /// ```
 #[macro_export]
 macro_rules! create_container {
     ($transaction:expr, { $($attribute:ident = $value:expr),+ }) => {
         {
+            use $crate::modify_container;
+
             let transaction: &mut $crate::rules::infrastructure::ecs::transaction::Transaction = $transaction;
 
             let (handle, new_container_modification) = $crate::rules::infrastructure::ecs::transaction::AddContainerModification::new();
@@ -116,11 +122,15 @@ macro_rules! create_container {
 /// A helper for creating modifications to an attribute container
 ///
 /// ```
-/// # let dummy_attribute = Attribute<u32>::new();
-/// # let dummy_handle = Handle::new();
-/// let transaction = Transaction::new();
-/// modify_container!(&mut transaction, {
-///     dummy_attribute = 2,
+/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
+/// # use tank_game::rules::infrastructure::ecs::transaction::Transaction;
+/// # use tank_game::{create_container,modify_container};
+/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+///
+/// let mut transaction = Transaction::new();
+/// # let dummy_handle = create_container!(&mut transaction, { dummy_attribute = 3 });
+/// modify_container!(&mut transaction, dummy_handle, {
+///     dummy_attribute = 2
 /// });
 /// ```
 #[macro_export]

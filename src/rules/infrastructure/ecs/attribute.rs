@@ -5,6 +5,12 @@ use as_any::AsAny;
 /// The common ancestor for all attribute values
 pub trait AttributeValue: AsAny + std::fmt::Debug {}
 
+impl AsRef<dyn AttributeValue> for dyn AttributeValue {
+    fn as_ref(&self) -> &dyn AttributeValue {
+        self
+    }
+}
+
 /// Allow attributes to use u32
 impl AttributeValue for u32 {}
 
@@ -13,7 +19,8 @@ impl AttributeValue for u32 {}
 /// Each attribute has a name and value type.  For example we can
 /// create an attribute called speed that stores a u32
 /// ```
-/// let speed = Attribute<u32>::new("speed");
+/// # use tank_game::rules::infrastructure::ecs::attribute::Attribute;
+/// let speed = Attribute::<u32>::new("speed");
 /// ```
 #[derive(Hash, Eq, Debug)]
 pub struct Attribute<ValueType: AttributeValue> {
@@ -48,7 +55,8 @@ impl<ValueType: AttributeValue> Attribute<ValueType> {
 ///
 /// We can define a new attribute DAMAGE_PER_TRUN like so
 /// ```
-/// attribute!(DAMAGE_PER_TURN: u8);
+/// # use tank_game::attribute;
+/// attribute!(DAMAGE_PER_TURN: u32);
 /// ```
 #[macro_export]
 macro_rules! attribute {
