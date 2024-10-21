@@ -1,3 +1,14 @@
+/// Match a generic type to one of several base types and run the applicable branch
+///
+/// ```
+/// # use crate::rules::infrastructure::ecs::attribute::AttributeValue;
+/// let value = 3u32;
+/// let attribute_value: &dyn AttributeValue = &value;
+/// match_type!(attribute_value, {
+///     value: u32 => assert_eq!(value, 2),
+///     _: u8 => panic!("This branch won't be called")
+/// });
+/// ```
 #[macro_export]
 macro_rules! match_type {
     ($any_var:ident, { $( $var_name:ident: $type:ty => $code:expr ),+ }) => {

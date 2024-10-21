@@ -6,17 +6,28 @@ use crate::rules::infrastructure::error::RuleError;
 
 use super::attribute::{Attribute, AttributeValue};
 
+/// A generic container for storing keys of different types
+///
+/// ```
+/// # let dummy_attribute = Attribute<u32>::new();
+/// let mut container = AttributeContainer::new();
+/// container.put(&dummy_attribute, 2);
+/// assert_eq!(container.get(&dummy_attribute), 2);
+/// ```
 pub struct AttributeContainer {
     attributes: HashMap<&'static str, Box<dyn AttributeValue>>
 }
 
 impl AttributeContainer {
+    /// Create an empty attribute container
+    #[inline]
     pub fn new() -> AttributeContainer {
         AttributeContainer {
             attributes: HashMap::new(),
         }
     }
 
+    /// Get the attribute value from the container
     pub fn get<T: AttributeValue>(&self, key: &Attribute<T>) -> Result<&T, Box<dyn Error>> {
         match self.attributes.get(key.get_name()) {
             Some(any) => {
@@ -31,15 +42,21 @@ impl AttributeContainer {
         }
     }
 
+    /// Store the value of the attribute in the container
+    #[inline]
     pub fn set<T: AttributeValue>(&mut self, key: &Attribute<T>, value: T) {
         self.attributes.insert(key.get_name(), Box::new(value));
     }
 
+    /// Check if this container has the specified attribute
+    #[inline]
     pub fn has<T: AttributeValue>(&self, key: &Attribute<T>) -> bool {
         self.attributes.contains_key(key.get_name())
     }
 
+    /// Iterate the attributes stored in the container
     // TODO: Proper IntoIter
+    #[inline]
     pub fn iter(&self) -> impl Iterator<Item=(&&'static str, &Box<dyn AttributeValue>)> {
         self.attributes.iter()
     }

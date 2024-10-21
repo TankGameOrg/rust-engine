@@ -2,8 +2,10 @@ use std::marker::PhantomData;
 
 use as_any::AsAny;
 
+/// The common ancestor for all attribute values
 pub trait AttributeValue: AsAny + std::fmt::Debug {}
 
+/// Allow attributes to use u32
 impl AttributeValue for u32 {}
 
 /// An attribute that can be used to access/store data on an entity
