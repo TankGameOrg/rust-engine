@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use super::{attribute::{Attribute, AttributeValue}, container::AttributeContainer, pool::{Handle, Pool}};
+use super::{attribute::{Attribute, AttributeValue}, pool::{Handle, Pool}};
 
 pub trait Modification {
     /// Modify the pool or one of it's attribute containers
@@ -49,7 +49,7 @@ impl AddContainerModification {
 
 impl Modification for AddContainerModification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        pool.add_attribute_container_with_handle(self.handle, AttributeContainer::new())?;
+        pool.add_attribute_container_with_handle(self.handle)?;
         Ok(())
     }
 }
