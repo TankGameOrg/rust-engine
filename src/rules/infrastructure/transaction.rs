@@ -27,6 +27,20 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
+        let container = pool.get_attribute_container(self.handle)?;
+        let current_value = container.get(self.attribute)
+            .ok()
+            .map(|value| value.clone());
+
+        if let Some(index) = pool.get_index_mut(self.attribute) {
+            if let Some(current_value) = current_value {
+                index.update_container(self.handle, &current_value, &self.new_value);
+            }
+            else {
+                index.add_container(self.handle, &self.new_value);
+            }
+        }
+
         pool.get_attribute_container_mut(self.handle)?.set(self.attribute, self.new_value.clone());
         Ok(())
     }

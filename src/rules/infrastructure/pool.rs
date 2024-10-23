@@ -1,8 +1,10 @@
-use std::{collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}};
+use std::{collections::HashMap, error::Error, marker::PhantomData, sync::atomic::{AtomicUsize, Ordering}};
+
+use as_any::{AsAny, Downcast};
 
 use crate::rules::infrastructure::error::RuleError;
 
-use super::{attribute::AttributeValue, container::AttributeContainer};
+use super::{attribute::{Attribute, AttributeValue}, container::AttributeContainer};
 
 
 /// A handle can be used to access and modify an AttributeContainer in a Pool
@@ -20,6 +22,42 @@ impl Handle {
 
 impl AttributeValue for Handle {}
 
+pub trait Index: AsAny {
+    fn add_container(&mut self, handle: Handle, new_value: &dyn AttributeValue);
+    fn update_container(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue);
+}
+
+pub trait AttributeIndex<T: AttributeValue> {
+    fn add_container(&mut self, handle: Handle, new_value: &T);
+    fn update_container(&mut self, handle: Handle, old_value: &T, new_value: &T);
+}
+
+struct AttributeIndexWrapper<T: AttributeValue, IndexType: AttributeIndex<T>> {
+    index: IndexType,
+    phantom: PhantomData<T>,
+}
+
+impl<T: AttributeValue, IndexType: AttributeIndex<T>> AttributeIndexWrapper<T, IndexType> {
+    fn new(index: IndexType) -> AttributeIndexWrapper<T, IndexType> {
+        AttributeIndexWrapper {
+            index,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<T: AttributeValue, IndexType: AttributeIndex<T> + 'static> Index for AttributeIndexWrapper<T, IndexType> {
+    fn add_container(&mut self, handle: Handle, new_value: &dyn AttributeValue) {
+        // TODO: Proper type checks?
+        self.index.add_container(handle, new_value.downcast_ref::<T>().unwrap());
+    }
+
+    fn update_container(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) {
+        // TODO: Proper type checks?
+        self.index.update_container(handle, old_value.downcast_ref::<T>().unwrap(), new_value.downcast_ref::<T>().unwrap());
+    }
+}
+
 pub struct GatheredResult<'container> {
     pub handle: Handle,
     pub container: &'container AttributeContainer,
@@ -27,7 +65,8 @@ pub struct GatheredResult<'container> {
 
 /// A collection of attribute containers that can be queried by their attributes
 pub struct Pool {
-    containers: HashMap<Handle, AttributeContainer>
+    containers: HashMap<Handle, AttributeContainer>,
+    indexes: HashMap<&'static str, Box<dyn Index>>,
 }
 
 impl Pool {
@@ -35,6 +74,7 @@ impl Pool {
     pub fn new() -> Pool {
         Pool {
             containers: HashMap::new(),
+            indexes: HashMap::new(),
         }
     }
 
@@ -90,6 +130,24 @@ impl Pool {
                 }
             })
     }
+
+    pub fn get_index<T: AttributeValue>(&self, attribute: &Attribute<T>) -> Option<&dyn Index> {
+        self.indexes.get(attribute.get_name()).map(|index| index.as_ref())
+    }
+
+    pub(super) fn get_index_mut<T: AttributeValue>(&mut self, attribute: &Attribute<T>) -> Option<&mut Box<dyn Index>> {
+        self.indexes.get_mut(attribute.get_name())
+    }
+
+    #[inline]
+    pub fn add_index_typed<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl AttributeIndex<T> + 'static) {
+        self.add_index(attribute, AttributeIndexWrapper::new(index));
+    }
+
+    #[inline]
+    pub fn add_index<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl Index + 'static) {
+        self.indexes.insert(attribute.get_name(), Box::new(index));
+    }
 }
 
 impl std::fmt::Debug for Pool {
@@ -99,13 +157,25 @@ impl std::fmt::Debug for Pool {
     }
 }
 
+pub fn get_index_as<'index, T: AttributeValue, IndexType: Index + 'static>(pool: &'index Pool, attribute: &Attribute<T>) -> Result<&'index IndexType, Box<dyn Error>> {
+    match pool.get_index(attribute) {
+        Some(index) => {
+            match index.downcast_ref::<IndexType>() {
+                Some(index) => Ok(index),
+                None => Err(Box::new(RuleError::Generic(format!("Expected index for {} to be {} but got type {:?}", attribute.get_name(), stringify!(IndexType), index.type_id())))),
+            }
+        },
+        None => Err(Box::new(RuleError::Generic(format!("Could not find an index for {}", attribute.get_name())))),
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use std::error::Error;
+    use std::{collections::HashSet, error::Error};
 
-    use crate::rules::infrastructure::attribute::DUMMY_ATTRIBUTE;
+    use crate::{modify_container, rules::infrastructure::{attribute::DUMMY_ATTRIBUTE, transaction::Transaction}};
 
-    use super::{GatheredResult, Handle, Pool};
+    use super::*;
 
     #[test]
     fn can_modify_and_retrieve_containers() {
@@ -164,5 +234,61 @@ mod test {
         assert_eq!(two.len(), 2);
         assert!(two.contains(&first_handle));
         assert!(two.contains(&second_handle));
+    }
+
+
+    struct HasAttributeIndex {
+        containers: HashSet<Handle>,
+    }
+
+    impl HasAttributeIndex {
+        fn new() -> HasAttributeIndex {
+            return HasAttributeIndex {
+                containers: HashSet::new(),
+            }
+        }
+    }
+
+    impl Index for HasAttributeIndex {
+        fn add_container(&mut self, handle: Handle, _new_value: &dyn AttributeValue) {
+            self.containers.insert(handle);
+        }
+
+        fn update_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue, _new_value: &dyn AttributeValue) {}
+    }
+
+    fn query_has_attribute<'iter, T: AttributeValue>(pool: &'iter Pool, attribute: &Attribute<T>) -> Result<Vec<GatheredResult<'iter>>, Box<dyn Error>> {
+        let index: &HasAttributeIndex = get_index_as(pool, attribute)?;
+
+        index.containers.iter()
+            .map(|handle| {
+                Ok(GatheredResult {
+                    handle: *handle,
+                    container: pool.get_attribute_container(*handle)?,
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn index_test() {
+        let mut pool = Pool::new();
+        pool.add_index(&DUMMY_ATTRIBUTE, HasAttributeIndex::new());
+
+        pool.add_attribute_container();
+
+        let handle = pool.add_attribute_container();
+
+        let mut transaction = Transaction::new();
+        modify_container!(&mut transaction, handle, {
+            DUMMY_ATTRIBUTE = 2
+        });
+
+        transaction.apply(&mut pool).unwrap();
+
+        let matches = query_has_attribute(&pool, &DUMMY_ATTRIBUTE).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].handle, handle);
     }
 }
