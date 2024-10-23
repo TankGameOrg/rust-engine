@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, marker::PhantomData, sync::atomic::{AtomicUsize, Ordering}};
+use std::{collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}};
 
 use as_any::{AsAny, Downcast};
 
@@ -30,32 +30,6 @@ pub trait Index: AsAny {
 pub trait AttributeIndex<T: AttributeValue> {
     fn add_container(&mut self, handle: Handle, new_value: &T);
     fn update_container(&mut self, handle: Handle, old_value: &T, new_value: &T);
-}
-
-struct AttributeIndexWrapper<T: AttributeValue, IndexType: AttributeIndex<T>> {
-    index: IndexType,
-    phantom: PhantomData<T>,
-}
-
-impl<T: AttributeValue, IndexType: AttributeIndex<T>> AttributeIndexWrapper<T, IndexType> {
-    fn new(index: IndexType) -> AttributeIndexWrapper<T, IndexType> {
-        AttributeIndexWrapper {
-            index,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: AttributeValue, IndexType: AttributeIndex<T> + 'static> Index for AttributeIndexWrapper<T, IndexType> {
-    fn add_container(&mut self, handle: Handle, new_value: &dyn AttributeValue) {
-        // TODO: Proper type checks?
-        self.index.add_container(handle, new_value.downcast_ref::<T>().unwrap());
-    }
-
-    fn update_container(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) {
-        // TODO: Proper type checks?
-        self.index.update_container(handle, old_value.downcast_ref::<T>().unwrap(), new_value.downcast_ref::<T>().unwrap());
-    }
 }
 
 pub struct GatheredResult<'container> {
@@ -137,11 +111,6 @@ impl Pool {
 
     pub(super) fn get_index_mut<T: AttributeValue>(&mut self, attribute: &Attribute<T>) -> Option<&mut Box<dyn Index>> {
         self.indexes.get_mut(attribute.get_name())
-    }
-
-    #[inline]
-    pub fn add_index_typed<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl AttributeIndex<T> + 'static) {
-        self.add_index(attribute, AttributeIndexWrapper::new(index));
     }
 
     #[inline]
