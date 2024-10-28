@@ -25,11 +25,7 @@ impl AttributeValue for Handle {}
 pub trait Index: AsAny {
     fn add_container(&mut self, handle: Handle, new_value: &dyn AttributeValue);
     fn update_container(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue);
-}
-
-pub trait AttributeIndex<T: AttributeValue> {
-    fn add_container(&mut self, handle: Handle, new_value: &T);
-    fn update_container(&mut self, handle: Handle, old_value: &T, new_value: &T);
+    fn remove_container(&mut self, handle: Handle, old_value: &dyn AttributeValue);
 }
 
 pub struct GatheredResult<'container> {
@@ -105,16 +101,45 @@ impl Pool {
             })
     }
 
-    pub fn get_index<T: AttributeValue>(&self, attribute: &Attribute<T>) -> Option<&dyn Index> {
-        self.indexes.get(attribute.get_name()).map(|index| index.as_ref())
+    /// Gather the containers assosiated with an iterable of handles
+    /// 
+    /// Return an error if any of the containers doesn't exist
+    pub fn gather_handles(&self, iter: impl Iterator<Item=Handle>) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
+        iter.map(|handle| {
+            Ok(GatheredResult {
+                handle,
+                container: self.get_attribute_container(handle)?,
+            })
+        })
+        .collect()
     }
 
+    /// Get an index which can be used to find one or more containers based on a specific attribute
+    pub fn get_index<T: AttributeValue, IndexType: Index + 'static>(&self, attribute: &Attribute<T>) -> Result<&IndexType, Box<dyn Error>> {
+        match self.indexes.get(attribute.get_name()) {
+            Some(index) => {
+                match index.as_ref().downcast_ref::<IndexType>() {
+                    Some(index) => Ok(index),
+                    None => Err(Box::new(RuleError::Generic(format!("Expected index for {} to be {} but got type {:?}", attribute.get_name(), stringify!(IndexType), index.type_id())))),
+                }
+            },
+            None => Err(Box::new(RuleError::Generic(format!("Could not find an index for {}", attribute.get_name())))),
+        }
+    }
+
+    /// Get a mutable refrence to an index to update it to handle a modification to a container
+    #[inline]
     pub(super) fn get_index_mut<T: AttributeValue>(&mut self, attribute: &Attribute<T>) -> Option<&mut Box<dyn Index>> {
         self.indexes.get_mut(attribute.get_name())
     }
 
+    /// Add an index to optimize queries for containers with a specific attribute
+    /// 
+    /// All indexes must be added before any containers are and each attribute can only have one index
     #[inline]
     pub fn add_index<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl Index + 'static) {
+        assert!(self.containers.len() == 0, "Index for {:?} was added after containers had been added", attribute);
+        assert!(!self.indexes.contains_key(attribute.get_name()), "An index has already been registered for {:?}", attribute);
         self.indexes.insert(attribute.get_name(), Box::new(index));
     }
 }
@@ -123,18 +148,6 @@ impl std::fmt::Debug for Pool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Pool ")?;
         self.containers.fmt(f)
-    }
-}
-
-pub fn get_index_as<'index, T: AttributeValue, IndexType: Index + 'static>(pool: &'index Pool, attribute: &Attribute<T>) -> Result<&'index IndexType, Box<dyn Error>> {
-    match pool.get_index(attribute) {
-        Some(index) => {
-            match index.downcast_ref::<IndexType>() {
-                Some(index) => Ok(index),
-                None => Err(Box::new(RuleError::Generic(format!("Expected index for {} to be {} but got type {:?}", attribute.get_name(), stringify!(IndexType), index.type_id())))),
-            }
-        },
-        None => Err(Box::new(RuleError::Generic(format!("Could not find an index for {}", attribute.get_name())))),
     }
 }
 
@@ -216,6 +229,12 @@ mod test {
                 containers: HashSet::new(),
             }
         }
+
+        fn gather<'iter, T: AttributeValue>(pool: &'iter Pool, attribute: &Attribute<T>) -> Result<Vec<GatheredResult<'iter>>, Box<dyn Error>> {
+            let index: &HasAttributeIndex = pool.get_index(attribute)?;
+    
+            pool.gather_handles(index.containers.iter().map(|handle| *handle))
+        }
     }
 
     impl Index for HasAttributeIndex {
@@ -223,20 +242,11 @@ mod test {
             self.containers.insert(handle);
         }
 
+        fn remove_container(&mut self, handle: Handle, _old_value: &dyn AttributeValue) {
+            self.containers.remove(&handle);
+        }
+
         fn update_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue, _new_value: &dyn AttributeValue) {}
-    }
-
-    fn query_has_attribute<'iter, T: AttributeValue>(pool: &'iter Pool, attribute: &Attribute<T>) -> Result<Vec<GatheredResult<'iter>>, Box<dyn Error>> {
-        let index: &HasAttributeIndex = get_index_as(pool, attribute)?;
-
-        index.containers.iter()
-            .map(|handle| {
-                Ok(GatheredResult {
-                    handle: *handle,
-                    container: pool.get_attribute_container(*handle)?,
-                })
-            })
-            .collect()
     }
 
     #[test]
@@ -255,7 +265,7 @@ mod test {
 
         transaction.apply(&mut pool).unwrap();
 
-        let matches = query_has_attribute(&pool, &DUMMY_ATTRIBUTE).unwrap();
+        let matches = HasAttributeIndex::gather(&pool, &DUMMY_ATTRIBUTE).unwrap();
 
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].handle, handle);
