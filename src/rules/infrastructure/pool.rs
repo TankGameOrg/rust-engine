@@ -217,4 +217,31 @@ mod test {
         assert!(two.contains(&first_handle));
         assert!(two.contains(&second_handle));
     }
+
+    #[test]
+    fn can_gather_containers_from_handles() {
+        let mut pool = Pool::new();
+        let first_handle = pool.add_attribute_container();
+        let first: &mut AttributeContainer = pool.get_attribute_container_mut(first_handle).unwrap();
+        first.set(&DUMMY_ATTRIBUTE, 2);
+
+        let second_handle = pool.add_attribute_container();
+        let second = pool.get_attribute_container_mut(second_handle).unwrap();
+        second.set(&DUMMY_ATTRIBUTE, 1);
+
+        pool.add_attribute_container();
+
+        // Gather two of the containers
+        let matches = pool.gather_handles(vec![first_handle, second_handle].iter()).unwrap();
+
+        assert_eq!(matches.len(), 2);
+
+        let handles: Vec<Handle> = matches.iter().map(|result| result.handle).collect();
+        assert!(handles.contains(&first_handle));
+        assert!(handles.contains(&second_handle));
+
+        let attributes: Vec<u32> = matches.iter().map(|result| *result.container.get(&DUMMY_ATTRIBUTE).unwrap()).collect();
+        assert!(attributes.contains(&1));
+        assert!(attributes.contains(&2));
+    }
 }
