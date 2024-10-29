@@ -159,3 +159,65 @@ macro_rules! modify_container {
         }
     };
 }
+
+#[cfg(test)]
+mod test {
+    use std::error::Error;
+
+    use crate::rules::infrastructure::{attribute::DUMMY_ATTRIBUTE, error::RuleError, pool::Index};
+
+    use super::*;
+
+    struct TestIndex {
+        handle: Option<Handle>,
+    }
+
+    impl TestIndex {
+        fn new() -> TestIndex {
+            return TestIndex {
+                handle: None,
+            }
+        }
+
+        fn get<'iter>(pool: &'iter Pool) -> Result<Handle, Box<dyn Error>> {
+            let index: &TestIndex = pool.get_index(&DUMMY_ATTRIBUTE)?;
+    
+            match index.handle {
+                None => Err(Box::new(RuleError::Generic(String::from("No handle stored yet")))),
+                Some(handle) => Ok(handle),
+            }
+        }
+    }
+
+    impl Index for TestIndex {
+        fn add_container(&mut self, handle: Handle, _new_value: &dyn AttributeValue) {
+            self.handle = Some(handle);
+        }
+
+        fn remove_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue) {
+            self.handle = None;
+        }
+
+        fn update_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue, _new_value: &dyn AttributeValue) {}
+    }
+
+    #[test]
+    fn index_test() {
+        let mut pool = Pool::new();
+        pool.add_index(&DUMMY_ATTRIBUTE, TestIndex::new());
+
+        let handle = pool.add_attribute_container();
+
+        let mut transaction = Transaction::new();
+        modify_container!(&mut transaction, handle, {
+            DUMMY_ATTRIBUTE = 2
+        });
+
+        transaction.apply(&mut pool).unwrap();
+
+        pool.add_attribute_container();
+
+        let result = TestIndex::get(&pool).unwrap();
+        assert_eq!(result, handle);
+    }
+}

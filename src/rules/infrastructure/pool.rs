@@ -104,18 +104,18 @@ impl Pool {
     /// Gather the containers assosiated with an iterable of handles
     /// 
     /// Return an error if any of the containers doesn't exist
-    pub fn gather_handles(&self, iter: impl Iterator<Item=Handle>) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
+    pub fn gather_handles<'iter>(&self, iter: impl Iterator<Item=&'iter Handle>) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
         iter.map(|handle| {
             Ok(GatheredResult {
-                handle,
-                container: self.get_attribute_container(handle)?,
+                handle: *handle,
+                container: self.get_attribute_container(*handle)?,
             })
         })
         .collect()
     }
 
     /// Get an index which can be used to find one or more containers based on a specific attribute
-    pub fn get_index<T: AttributeValue, IndexType: Index + 'static>(&self, attribute: &Attribute<T>) -> Result<&IndexType, Box<dyn Error>> {
+    pub fn get_index<IndexType: Index + 'static>(&self, attribute: &Attribute<impl AttributeValue>) -> Result<&IndexType, Box<dyn Error>> {
         match self.indexes.get(attribute.get_name()) {
             Some(index) => {
                 match index.as_ref().downcast_ref::<IndexType>() {
@@ -129,7 +129,7 @@ impl Pool {
 
     /// Get a mutable refrence to an index to update it to handle a modification to a container
     #[inline]
-    pub(super) fn get_index_mut<T: AttributeValue>(&mut self, attribute: &Attribute<T>) -> Option<&mut Box<dyn Index>> {
+    pub(super) fn get_index_mut(&mut self, attribute: &Attribute<impl AttributeValue>) -> Option<&mut Box<dyn Index>> {
         self.indexes.get_mut(attribute.get_name())
     }
 
@@ -137,7 +137,7 @@ impl Pool {
     /// 
     /// All indexes must be added before any containers are and each attribute can only have one index
     #[inline]
-    pub fn add_index<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl Index + 'static) {
+    pub fn add_index(&mut self, attribute: &Attribute<impl AttributeValue>, index: impl Index + 'static) {
         assert!(self.containers.len() == 0, "Index for {:?} was added after containers had been added", attribute);
         assert!(!self.indexes.contains_key(attribute.get_name()), "An index has already been registered for {:?}", attribute);
         self.indexes.insert(attribute.get_name(), Box::new(index));
@@ -153,9 +153,9 @@ impl std::fmt::Debug for Pool {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, error::Error};
+    use std::error::Error;
 
-    use crate::{modify_container, rules::infrastructure::{attribute::DUMMY_ATTRIBUTE, transaction::Transaction}};
+    use crate::rules::infrastructure::attribute::DUMMY_ATTRIBUTE;
 
     use super::*;
 
@@ -216,58 +216,5 @@ mod test {
         assert_eq!(two.len(), 2);
         assert!(two.contains(&first_handle));
         assert!(two.contains(&second_handle));
-    }
-
-
-    struct HasAttributeIndex {
-        containers: HashSet<Handle>,
-    }
-
-    impl HasAttributeIndex {
-        fn new() -> HasAttributeIndex {
-            return HasAttributeIndex {
-                containers: HashSet::new(),
-            }
-        }
-
-        fn gather<'iter, T: AttributeValue>(pool: &'iter Pool, attribute: &Attribute<T>) -> Result<Vec<GatheredResult<'iter>>, Box<dyn Error>> {
-            let index: &HasAttributeIndex = pool.get_index(attribute)?;
-    
-            pool.gather_handles(index.containers.iter().map(|handle| *handle))
-        }
-    }
-
-    impl Index for HasAttributeIndex {
-        fn add_container(&mut self, handle: Handle, _new_value: &dyn AttributeValue) {
-            self.containers.insert(handle);
-        }
-
-        fn remove_container(&mut self, handle: Handle, _old_value: &dyn AttributeValue) {
-            self.containers.remove(&handle);
-        }
-
-        fn update_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue, _new_value: &dyn AttributeValue) {}
-    }
-
-    #[test]
-    fn index_test() {
-        let mut pool = Pool::new();
-        pool.add_index(&DUMMY_ATTRIBUTE, HasAttributeIndex::new());
-
-        pool.add_attribute_container();
-
-        let handle = pool.add_attribute_container();
-
-        let mut transaction = Transaction::new();
-        modify_container!(&mut transaction, handle, {
-            DUMMY_ATTRIBUTE = 2
-        });
-
-        transaction.apply(&mut pool).unwrap();
-
-        let matches = HasAttributeIndex::gather(&pool, &DUMMY_ATTRIBUTE).unwrap();
-
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].handle, handle);
     }
 }
