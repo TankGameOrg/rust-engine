@@ -1,8 +1,7 @@
 /// Match and downcast a generic type to one of several base types
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::attribute::AttributeValue;
-/// # use tank_game::rules::infrastructure::pool::Handle;
+/// # use tank_game::rules::infrastructure::ecs::{Handle, AttributeValue};
 /// # use tank_game::match_type;
 /// let value: u32 = 3;
 /// let attribute_value: &dyn AttributeValue = &value;
@@ -32,7 +31,7 @@ macro_rules! match_type {
             )+
 
             if !value_handled {
-                Err(Box::new($crate::rules::infrastructure::error::RuleError::Generic(format!("No case found for type: {:?}", type_id))))
+                Err(Box::new($crate::rules::infrastructure::RuleError::Generic(format!("No case found for type: {:?}", type_id))))
             } else {
                 Ok(())
             }

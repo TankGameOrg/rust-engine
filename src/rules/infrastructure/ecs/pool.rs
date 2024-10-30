@@ -155,7 +155,7 @@ impl std::fmt::Debug for Pool {
 mod test {
     use std::error::Error;
 
-    use crate::rules::infrastructure::attribute::DUMMY_ATTRIBUTE;
+    use crate::rules::infrastructure::ecs::attribute::DUMMY_ATTRIBUTE;
 
     use super::*;
 

@@ -1,6 +1,5 @@
-pub mod attribute;
-pub mod container;
-pub mod pool;
-pub mod transaction;
-pub mod error;
+mod error;
 pub mod utilities;
+pub mod ecs;
+
+pub use error::RuleError;

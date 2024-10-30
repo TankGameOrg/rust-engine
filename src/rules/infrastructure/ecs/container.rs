@@ -2,14 +2,14 @@ use std::{any::{Any, TypeId}, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
-use super::error::RuleError;
+use crate::rules::infrastructure::RuleError;
+
 use super::attribute::{Attribute, AttributeValue};
 
 /// A generic container for storing keys of different types
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::attribute::Attribute;
-/// # use tank_game::rules::infrastructure::container::AttributeContainer;
+/// # use tank_game::rules::infrastructure::ecs::{Attribute, AttributeContainer};
 /// # let dummy_attribute = Attribute::<u32>::new("dummy_attribute");
 /// #
 /// let mut container = AttributeContainer::new();
@@ -83,7 +83,7 @@ impl std::fmt::Debug for AttributeContainer {
 mod test {
     use core::panic;
 
-    use crate::rules::infrastructure::{attribute::DUMMY_ATTRIBUTE, error::RuleError};
+    use crate::rules::infrastructure::{ecs::attribute::DUMMY_ATTRIBUTE, RuleError};
 
     use super::AttributeContainer;
 
