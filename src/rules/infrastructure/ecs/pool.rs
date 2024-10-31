@@ -26,9 +26,9 @@ impl AttributeValue for Handle {}
 /// 
 /// It allows us to store Indexes with multiple AttributeValue types in the same HashMap
 pub(super) trait GenericIndex: AsAny {
-    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue);
-    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue);
-    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue);
+    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
+    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
+    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
 }
 
 /// A type that can optimize searches for containers with a specified attribute
@@ -40,29 +40,47 @@ pub trait Index: AsAny {
     type AttributeValueType;
 
     /// Start tracking a container after the attribute this index tracks has been added to it
-    fn add_container(&mut self, handle: Handle, new_value: &Self::AttributeValueType);
+    /// 
+    /// If an error is returned, the transaction that triggered the container update will not be applied
+    fn add_container(&mut self, handle: Handle, new_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>>;
 
     /// The value of the attribute that this index tracks has been updated
-    fn update_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType, new_value: &Self::AttributeValueType) {
-        self.remove_container(handle, old_value);
-        self.add_container(handle, new_value);
+    /// 
+    /// If an error is returned, the transaction that triggered the container update will not be applied
+    fn update_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType, new_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>> {
+        self.remove_container(handle, old_value)?;
+        self.add_container(handle, new_value)
     }
 
     /// Stop tracking a container after the attribute this index tracks was removed
-    fn remove_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType);
+    /// 
+    /// If an error is returned, the transaction that triggered the container update will not be applied
+    fn remove_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>>;
 }
 
 impl<F: Index> GenericIndex for F {    
-    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue) {
-        self.add_container(handle, new_value.downcast_ref().unwrap());
+    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
+        let new_value = new_value.downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast new_value to {} from {:?}", stringify!(AttributeValueType), new_value.type_id()))))?;
+
+        self.add_container(handle, new_value)
     }
 
-    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) {
-        self.update_container(handle, old_value.downcast_ref().unwrap(), new_value.downcast_ref().unwrap());
+    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
+        let old_value = old_value.downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast old_value to {} from {:?}", stringify!(AttributeValueType), old_value.type_id()))))?;
+
+        let new_value = new_value.downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast new_value to {} from {:?}", stringify!(AttributeValueType), new_value.type_id()))))?;
+
+        self.update_container(handle, old_value, new_value)
     }
     
-    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue) {
-        self.remove_container(handle, old_value.downcast_ref().unwrap());
+    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
+        let old_value = old_value.downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast old_value to {} from {:?}", stringify!(AttributeValueType), old_value.type_id()))))?;
+
+        self.remove_container(handle, old_value)
     }
 }
 
