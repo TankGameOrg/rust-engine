@@ -1,11 +1,17 @@
-use std::{collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}};
+use std::{
+    collections::HashMap,
+    error::Error,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use as_any::{AsAny, Downcast};
 
 use crate::rules::infrastructure::error::RuleError;
 
-use super::{attribute::{Attribute, AttributeValue}, container::AttributeContainer};
-
+use super::{
+    attribute::{Attribute, AttributeValue},
+    container::AttributeContainer,
+};
 
 /// A handle can be used to access and modify an AttributeContainer in a Pool
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
@@ -23,16 +29,29 @@ impl Handle {
 impl AttributeValue for Handle {}
 
 /// GenericIndex is the internal, boxable, representation of an index
-/// 
+///
 /// It allows us to store Indexes with multiple AttributeValue types in the same HashMap
 pub(super) trait GenericIndex: AsAny {
-    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
-    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
-    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
+    fn add_container_hook(
+        &mut self,
+        handle: Handle,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>>;
+    fn update_container_hook(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>>;
+    fn remove_container_hook(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>>;
 }
 
 /// A type that can optimize searches for containers with a specified attribute
-/// 
+///
 /// The Index trait provides a set of methods to update the index when an attribute changes
 /// but it does not provide an api for querying the index.  It is assumed that users will downcast
 /// the index and call an index specific query API.
@@ -40,45 +59,91 @@ pub trait Index: AsAny {
     type AttributeValueType;
 
     /// Start tracking a container after the attribute this index tracks has been added to it
-    /// 
+    ///
     /// If an error is returned, the transaction that triggered the container update will not be applied
-    fn add_container(&mut self, handle: Handle, new_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>>;
+    fn add_container(
+        &mut self,
+        handle: Handle,
+        new_value: &Self::AttributeValueType,
+    ) -> Result<(), Box<dyn Error>>;
 
     /// The value of the attribute that this index tracks has been updated
-    /// 
+    ///
     /// If an error is returned, the transaction that triggered the container update will not be applied
-    fn update_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType, new_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>> {
+    fn update_container(
+        &mut self,
+        handle: Handle,
+        old_value: &Self::AttributeValueType,
+        new_value: &Self::AttributeValueType,
+    ) -> Result<(), Box<dyn Error>> {
         self.remove_container(handle, old_value)?;
         self.add_container(handle, new_value)
     }
 
     /// Stop tracking a container after the attribute this index tracks was removed
-    /// 
+    ///
     /// If an error is returned, the transaction that triggered the container update will not be applied
-    fn remove_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>>;
+    fn remove_container(
+        &mut self,
+        handle: Handle,
+        old_value: &Self::AttributeValueType,
+    ) -> Result<(), Box<dyn Error>>;
 }
 
-impl<F: Index> GenericIndex for F {    
-    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
-        let new_value = new_value.downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast new_value to {} from {:?}", stringify!(AttributeValueType), new_value.type_id()))))?;
+impl<F: Index> GenericIndex for F {
+    fn add_container_hook(
+        &mut self,
+        handle: Handle,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>> {
+        let new_value = new_value
+            .downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Failed to cast new_value to {} from {:?}",
+                stringify!(AttributeValueType),
+                new_value.type_id()
+            ))))?;
 
         self.add_container(handle, new_value)
     }
 
-    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
-        let old_value = old_value.downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast old_value to {} from {:?}", stringify!(AttributeValueType), old_value.type_id()))))?;
+    fn update_container_hook(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>> {
+        let old_value = old_value
+            .downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Failed to cast old_value to {} from {:?}",
+                stringify!(AttributeValueType),
+                old_value.type_id()
+            ))))?;
 
-        let new_value = new_value.downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast new_value to {} from {:?}", stringify!(AttributeValueType), new_value.type_id()))))?;
+        let new_value = new_value
+            .downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Failed to cast new_value to {} from {:?}",
+                stringify!(AttributeValueType),
+                new_value.type_id()
+            ))))?;
 
         self.update_container(handle, old_value, new_value)
     }
-    
-    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
-        let old_value = old_value.downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!("Failed to cast old_value to {} from {:?}", stringify!(AttributeValueType), old_value.type_id()))))?;
+
+    fn remove_container_hook(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>> {
+        let old_value = old_value
+            .downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Failed to cast old_value to {} from {:?}",
+                stringify!(AttributeValueType),
+                old_value.type_id()
+            ))))?;
 
         self.remove_container(handle, old_value)
     }
@@ -109,10 +174,16 @@ impl Pool {
     /// This method exists to allow the AddContainerModification to return a handle when it's created even though the container
     /// itself hasn't been created yet
     #[inline]
-    pub(super) fn add_attribute_container_with_handle(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
+    pub(super) fn add_attribute_container_with_handle(
+        &mut self,
+        handle: Handle,
+    ) -> Result<(), Box<dyn Error>> {
         if self.containers.contains_key(&handle) {
             let current = self.containers.get(&handle).unwrap();
-            return Err(Box::new(RuleError::Generic(format!("The handle {:?} already exists in this pool (current = {:?})", handle, current))))
+            return Err(Box::new(RuleError::Generic(format!(
+                "The handle {:?} already exists in this pool (current = {:?})",
+                handle, current
+            ))));
         }
 
         self.containers.insert(handle, AttributeContainer::new());
@@ -131,36 +202,55 @@ impl Pool {
     ///
     /// If the container does not exist we return an error
     #[inline]
-    pub fn get_attribute_container(&self, handle: Handle) -> Result<&AttributeContainer, Box<dyn Error>> {
-        self.containers.get(&handle)
-            .ok_or(Box::new(RuleError::Generic(format!("Attribute container for {:?} does not exist", handle))))
+    pub fn get_attribute_container(
+        &self,
+        handle: Handle,
+    ) -> Result<&AttributeContainer, Box<dyn Error>> {
+        self.containers
+            .get(&handle)
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Attribute container for {:?} does not exist",
+                handle
+            ))))
     }
 
     /// Get a mutable reference to the attribute container pointed to by a haandle
     ///
     /// If the container does not exist we return an error
     #[inline]
-    pub(super) fn get_attribute_container_mut(&mut self, handle: Handle) -> Result<&mut AttributeContainer, Box<dyn Error>> {
-        self.containers.get_mut(&handle)
-            .ok_or(Box::new(RuleError::Generic(format!("Attribute container for {:?} does not exist", handle))))
+    pub(super) fn get_attribute_container_mut(
+        &mut self,
+        handle: Handle,
+    ) -> Result<&mut AttributeContainer, Box<dyn Error>> {
+        self.containers
+            .get_mut(&handle)
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Attribute container for {:?} does not exist",
+                handle
+            ))))
     }
 
     /// Filter all of the containers in the pool and return an iterator to the ones that match
-    pub fn gather<'iter>(&'iter self, predicate: &'iter dyn Fn(&AttributeContainer) -> bool) -> impl Iterator<Item = GatheredResult<'iter>> {
-        self.containers.iter()
+    pub fn gather<'iter>(
+        &'iter self,
+        predicate: &'iter dyn Fn(&AttributeContainer) -> bool,
+    ) -> impl Iterator<Item = GatheredResult<'iter>> {
+        self.containers
+            .iter()
             .filter(|(_, container)| predicate(*container))
-            .map(|(handle, container)| {
-                GatheredResult {
-                    handle: *handle,
-                    container,
-                }
+            .map(|(handle, container)| GatheredResult {
+                handle: *handle,
+                container,
             })
     }
 
     /// Gather the containers assosiated with an iterable of handles
-    /// 
+    ///
     /// Return an error if any of the containers doesn't exist
-    pub fn gather_handles<'iter>(&self, iter: impl Iterator<Item=&'iter Handle>) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
+    pub fn gather_handles<'iter>(
+        &self,
+        iter: impl Iterator<Item = &'iter Handle>,
+    ) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
         iter.map(|handle| {
             Ok(GatheredResult {
                 handle: *handle,
@@ -171,32 +261,59 @@ impl Pool {
     }
 
     /// Get an index which can be used to find one or more containers based on a specific attribute
-    pub fn get_index<T, IndexType>(&self, attribute: &Attribute<T>) -> Result<&IndexType, Box<dyn Error>>
-        where T: AttributeValue, IndexType: Index<AttributeValueType = T> + 'static {
+    pub fn get_index<T, IndexType>(
+        &self,
+        attribute: &Attribute<T>,
+    ) -> Result<&IndexType, Box<dyn Error>>
+    where
+        T: AttributeValue,
+        IndexType: Index<AttributeValueType = T> + 'static,
+    {
         match self.indexes.get(attribute.get_name()) {
-            Some(index) => {
-                match index.as_ref().downcast_ref::<IndexType>() {
-                    Some(index) => Ok(index),
-                    None => Err(Box::new(RuleError::Generic(format!("Expected index for {} to be {} but got type {:?}", attribute.get_name(), stringify!(IndexType), index.type_id())))),
-                }
+            Some(index) => match index.as_ref().downcast_ref::<IndexType>() {
+                Some(index) => Ok(index),
+                None => Err(Box::new(RuleError::Generic(format!(
+                    "Expected index for {} to be {} but got type {:?}",
+                    attribute.get_name(),
+                    stringify!(IndexType),
+                    index.type_id()
+                )))),
             },
-            None => Err(Box::new(RuleError::Generic(format!("Could not find an index for {}", attribute.get_name())))),
+            None => Err(Box::new(RuleError::Generic(format!(
+                "Could not find an index for {}",
+                attribute.get_name()
+            )))),
         }
     }
 
     /// Get a mutable refrence to an index to update it to handle a modification to a container
     #[inline]
-    pub(super) fn get_index_mut(&mut self, attribute: &Attribute<impl AttributeValue>) -> Option<&mut Box<dyn GenericIndex>> {
+    pub(super) fn get_index_mut(
+        &mut self,
+        attribute: &Attribute<impl AttributeValue>,
+    ) -> Option<&mut Box<dyn GenericIndex>> {
         self.indexes.get_mut(attribute.get_name())
     }
 
     /// Add an index to optimize queries for containers with a specific attribute
-    /// 
+    ///
     /// All indexes must be added before any containers are and each attribute can only have one index
     #[inline]
-    pub fn add_index<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl Index<AttributeValueType = T> + 'static) {
-        assert!(self.containers.len() == 0, "Index for {:?} was added after containers had been added", attribute);
-        assert!(!self.indexes.contains_key(attribute.get_name()), "An index has already been registered for {:?}", attribute);
+    pub fn add_index<T: AttributeValue>(
+        &mut self,
+        attribute: &Attribute<T>,
+        index: impl Index<AttributeValueType = T> + 'static,
+    ) {
+        assert!(
+            self.containers.len() == 0,
+            "Index for {:?} was added after containers had been added",
+            attribute
+        );
+        assert!(
+            !self.indexes.contains_key(attribute.get_name()),
+            "An index has already been registered for {:?}",
+            attribute
+        );
         self.indexes.insert(attribute.get_name(), Box::new(index));
     }
 }
@@ -254,18 +371,23 @@ mod test {
         pool.add_attribute_container();
 
         // Gather one of the containers
-        let one: Vec<GatheredResult> = pool.gather(&|container| {
-            *container.get(&DUMMY_ATTRIBUTE)
-                .or_else(|_| -> Result<&u32, Box<dyn Error>> { Ok(&5) })
-                .unwrap() < 2
-        }).collect();
+        let one: Vec<GatheredResult> = pool
+            .gather(&|container| {
+                *container
+                    .get(&DUMMY_ATTRIBUTE)
+                    .or_else(|_| -> Result<&u32, Box<dyn Error>> { Ok(&5) })
+                    .unwrap()
+                    < 2
+            })
+            .collect();
 
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].handle, second_handle);
         assert_eq!(*one[0].container.get(&DUMMY_ATTRIBUTE).unwrap(), 1);
 
         // Gather both of the ones with attributes
-        let two: Vec<Handle> = pool.gather(&|container| container.has(&DUMMY_ATTRIBUTE))
+        let two: Vec<Handle> = pool
+            .gather(&|container| container.has(&DUMMY_ATTRIBUTE))
             .map(|result| result.handle)
             .collect();
 
@@ -279,7 +401,8 @@ mod test {
     fn can_gather_containers_from_handles() {
         let mut pool = Pool::new();
         let first_handle = pool.add_attribute_container();
-        let first: &mut AttributeContainer = pool.get_attribute_container_mut(first_handle).unwrap();
+        let first: &mut AttributeContainer =
+            pool.get_attribute_container_mut(first_handle).unwrap();
         first.set(&DUMMY_ATTRIBUTE, 2);
 
         let second_handle = pool.add_attribute_container();
@@ -289,7 +412,9 @@ mod test {
         pool.add_attribute_container();
 
         // Gather two of the containers
-        let matches = pool.gather_handles(vec![first_handle, second_handle].iter()).unwrap();
+        let matches = pool
+            .gather_handles(vec![first_handle, second_handle].iter())
+            .unwrap();
 
         assert_eq!(matches.len(), 2);
 
@@ -297,7 +422,10 @@ mod test {
         assert!(handles.contains(&first_handle));
         assert!(handles.contains(&second_handle));
 
-        let attributes: Vec<u32> = matches.iter().map(|result| *result.container.get(&DUMMY_ATTRIBUTE).unwrap()).collect();
+        let attributes: Vec<u32> = matches
+            .iter()
+            .map(|result| *result.container.get(&DUMMY_ATTRIBUTE).unwrap())
+            .collect();
         assert!(attributes.contains(&1));
         assert!(attributes.contains(&2));
     }

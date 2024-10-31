@@ -1,6 +1,9 @@
 use std::error::Error;
 
-use super::{attribute::{Attribute, AttributeValue}, pool::{Handle, Pool}};
+use super::{
+    attribute::{Attribute, AttributeValue},
+    pool::{Handle, Pool},
+};
 
 pub trait Modification {
     /// Modify the pool or one of it's attribute containers
@@ -11,12 +14,16 @@ pub trait Modification {
 pub struct AttributeModification<T: AttributeValue> {
     handle: Handle,
     attribute: &'static Attribute<T>,
-    new_value: T
+    new_value: T,
 }
 
 impl<T: AttributeValue + Clone> AttributeModification<T> {
     #[inline]
-    pub fn new(handle: Handle, attribute: &'static Attribute<T>, new_value: T) -> AttributeModification<T> {
+    pub fn new(
+        handle: Handle,
+        attribute: &'static Attribute<T>,
+        new_value: T,
+    ) -> AttributeModification<T> {
         AttributeModification {
             handle,
             attribute,
@@ -28,20 +35,21 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
         let container = pool.get_attribute_container(self.handle)?;
-        let current_value = container.get(self.attribute)
+        let current_value = container
+            .get(self.attribute)
             .ok()
             .map(|value| value.clone());
 
         if let Some(index) = pool.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
                 index.update_container_hook(self.handle, &current_value, &self.new_value)?;
-            }
-            else {
+            } else {
                 index.add_container_hook(self.handle, &self.new_value)?;
             }
         }
 
-        pool.get_attribute_container_mut(self.handle)?.set(self.attribute, self.new_value.clone());
+        pool.get_attribute_container_mut(self.handle)?
+            .set(self.attribute, self.new_value.clone());
         Ok(())
     }
 }
@@ -55,9 +63,7 @@ impl AddContainerModification {
     #[inline]
     pub fn new() -> (Handle, AddContainerModification) {
         let handle = Handle::new();
-        (handle, AddContainerModification {
-            handle,
-        })
+        (handle, AddContainerModification { handle })
     }
 }
 
@@ -70,7 +76,7 @@ impl Modification for AddContainerModification {
 
 /// A series of modifications that can be applied to a pool
 pub struct Transaction {
-    modifications: Vec<Box<dyn Modification>>
+    modifications: Vec<Box<dyn Modification>>,
 }
 
 impl Transaction {
@@ -162,7 +168,10 @@ macro_rules! modify_container {
 mod test {
     use std::error::Error;
 
-    use crate::rules::infrastructure::{ecs::{attribute::DUMMY_ATTRIBUTE, pool::Index}, RuleError};
+    use crate::rules::infrastructure::{
+        ecs::{attribute::DUMMY_ATTRIBUTE, pool::Index},
+        RuleError,
+    };
 
     use super::*;
 
@@ -172,16 +181,16 @@ mod test {
 
     impl TestIndex {
         fn new() -> TestIndex {
-            return TestIndex {
-                handle: None,
-            }
+            return TestIndex { handle: None };
         }
 
         fn get<'iter>(pool: &'iter Pool) -> Result<Handle, Box<dyn Error>> {
             let index: &TestIndex = pool.get_index(&DUMMY_ATTRIBUTE)?;
-    
+
             match index.handle {
-                None => Err(Box::new(RuleError::Generic(String::from("No handle stored yet")))),
+                None => Err(Box::new(RuleError::Generic(String::from(
+                    "No handle stored yet",
+                )))),
                 Some(handle) => Ok(handle),
             }
         }
@@ -190,12 +199,20 @@ mod test {
     impl Index for TestIndex {
         type AttributeValueType = u32;
 
-        fn add_container(&mut self, handle: Handle, _new_value: &u32) -> Result<(), Box<dyn Error>> {
+        fn add_container(
+            &mut self,
+            handle: Handle,
+            _new_value: &u32,
+        ) -> Result<(), Box<dyn Error>> {
             self.handle = Some(handle);
             Ok(())
         }
 
-        fn remove_container(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
+        fn remove_container(
+            &mut self,
+            _handle: Handle,
+            _old_value: &u32,
+        ) -> Result<(), Box<dyn Error>> {
             self.handle = None;
             Ok(())
         }
@@ -209,9 +226,7 @@ mod test {
         let handle = pool.add_attribute_container();
 
         let mut transaction = Transaction::new();
-        modify_container!(&mut transaction, handle, {
-            DUMMY_ATTRIBUTE = 2
-        });
+        modify_container!(&mut transaction, handle, { DUMMY_ATTRIBUTE = 2 });
 
         transaction.apply(&mut pool).unwrap();
 

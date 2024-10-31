@@ -1,4 +1,8 @@
-use std::{any::{Any, TypeId}, collections::HashMap, error::Error};
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    error::Error,
+};
 
 use as_any::Downcast;
 
@@ -19,7 +23,7 @@ use super::attribute::{Attribute, AttributeValue};
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AttributeContainer {
-    attributes: HashMap<&'static str, Box<dyn AttributeValue>>
+    attributes: HashMap<&'static str, Box<dyn AttributeValue>>,
 }
 
 impl AttributeContainer {
@@ -34,15 +38,20 @@ impl AttributeContainer {
     /// Get the attribute value from the container
     pub fn get<T: AttributeValue>(&self, key: &Attribute<T>) -> Result<&T, Box<dyn Error>> {
         match self.attributes.get(key.get_name()) {
-            Some(any) => {
-                match any.as_ref().downcast_ref::<T>() {
-                    Some(value) => Ok(value),
-                    None => {
-                        panic!("Failed to unwrap attribute '{}' had type {:?} but expected {:?}", key.get_name(), any.type_id(), TypeId::of::<T>());
-                    },
+            Some(any) => match any.as_ref().downcast_ref::<T>() {
+                Some(value) => Ok(value),
+                None => {
+                    panic!(
+                        "Failed to unwrap attribute '{}' had type {:?} but expected {:?}",
+                        key.get_name(),
+                        any.type_id(),
+                        TypeId::of::<T>()
+                    );
                 }
             },
-            None => Err(Box::new(RuleError::AttributeNotFound { name: key.get_name() })),
+            None => Err(Box::new(RuleError::AttributeNotFound {
+                name: key.get_name(),
+            })),
         }
     }
 
@@ -67,7 +76,7 @@ impl AttributeContainer {
     /// Iterate the attributes stored in the container
     // TODO: Proper IntoIter
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item=(&&'static str, &Box<dyn AttributeValue>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&&'static str, &Box<dyn AttributeValue>)> {
         self.attributes.iter()
     }
 }
@@ -118,10 +127,10 @@ mod test {
         match container.get(&DUMMY_ATTRIBUTE) {
             Ok(_) => panic!("Result can't be ok"),
             Err(err) => {
-                if let Some(RuleError::AttributeNotFound { name }) = err.downcast_ref::<RuleError>() {
+                if let Some(RuleError::AttributeNotFound { name }) = err.downcast_ref::<RuleError>()
+                {
                     assert_eq!(*name, "DUMMY_ATTRIBUTE");
-                }
-                else {
+                } else {
                     panic!("Error should be AttributeNotFound but got {:?}", err);
                 }
             }
