@@ -22,10 +22,48 @@ impl Handle {
 
 impl AttributeValue for Handle {}
 
+/// GenericIndex is the internal, boxable, representation of an index
+/// 
+/// It allows us to store Indexes with multiple AttributeValue types in the same HashMap
+pub(super) trait GenericIndex: AsAny {
+    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue);
+    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue);
+    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue);
+}
+
+/// A type that can optimize searches for containers with a specified attribute
+/// 
+/// The Index trait provides a set of methods to update the index when an attribute changes
+/// but it does not provide an api for querying the index.  It is assumed that users will downcast
+/// the index and call an index specific query API.
 pub trait Index: AsAny {
-    fn add_container(&mut self, handle: Handle, new_value: &dyn AttributeValue);
-    fn update_container(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue);
-    fn remove_container(&mut self, handle: Handle, old_value: &dyn AttributeValue);
+    type AttributeValueType;
+
+    /// Start tracking a container after the attribute this index tracks has been added to it
+    fn add_container(&mut self, handle: Handle, new_value: &Self::AttributeValueType);
+
+    /// The value of the attribute that this index tracks has been updated
+    fn update_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType, new_value: &Self::AttributeValueType) {
+        self.remove_container(handle, old_value);
+        self.add_container(handle, new_value);
+    }
+
+    /// Stop tracking a container after the attribute this index tracks was removed
+    fn remove_container(&mut self, handle: Handle, old_value: &Self::AttributeValueType);
+}
+
+impl<F: Index> GenericIndex for F {    
+    fn add_container_hook(&mut self, handle: Handle, new_value: &dyn AttributeValue) {
+        self.add_container(handle, new_value.downcast_ref().unwrap());
+    }
+
+    fn update_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue, new_value: &dyn AttributeValue) {
+        self.update_container(handle, old_value.downcast_ref().unwrap(), new_value.downcast_ref().unwrap());
+    }
+    
+    fn remove_container_hook(&mut self, handle: Handle, old_value: &dyn AttributeValue) {
+        self.remove_container(handle, old_value.downcast_ref().unwrap());
+    }
 }
 
 pub struct GatheredResult<'container> {
@@ -36,7 +74,7 @@ pub struct GatheredResult<'container> {
 /// A collection of attribute containers that can be queried by their attributes
 pub struct Pool {
     containers: HashMap<Handle, AttributeContainer>,
-    indexes: HashMap<&'static str, Box<dyn Index>>,
+    indexes: HashMap<&'static str, Box<dyn GenericIndex>>,
 }
 
 impl Pool {
@@ -115,7 +153,8 @@ impl Pool {
     }
 
     /// Get an index which can be used to find one or more containers based on a specific attribute
-    pub fn get_index<IndexType: Index + 'static>(&self, attribute: &Attribute<impl AttributeValue>) -> Result<&IndexType, Box<dyn Error>> {
+    pub fn get_index<T, IndexType: Index<AttributeValueType = T> + 'static>(&self, attribute: &Attribute<T>) -> Result<&IndexType, Box<dyn Error>>
+        where T: AttributeValue {
         match self.indexes.get(attribute.get_name()) {
             Some(index) => {
                 match index.as_ref().downcast_ref::<IndexType>() {
@@ -129,7 +168,7 @@ impl Pool {
 
     /// Get a mutable refrence to an index to update it to handle a modification to a container
     #[inline]
-    pub(super) fn get_index_mut(&mut self, attribute: &Attribute<impl AttributeValue>) -> Option<&mut Box<dyn Index>> {
+    pub(super) fn get_index_mut(&mut self, attribute: &Attribute<impl AttributeValue>) -> Option<&mut Box<dyn GenericIndex>> {
         self.indexes.get_mut(attribute.get_name())
     }
 
@@ -137,7 +176,7 @@ impl Pool {
     /// 
     /// All indexes must be added before any containers are and each attribute can only have one index
     #[inline]
-    pub fn add_index(&mut self, attribute: &Attribute<impl AttributeValue>, index: impl Index + 'static) {
+    pub fn add_index<T: AttributeValue>(&mut self, attribute: &Attribute<T>, index: impl Index<AttributeValueType = T> + 'static) {
         assert!(self.containers.len() == 0, "Index for {:?} was added after containers had been added", attribute);
         assert!(!self.indexes.contains_key(attribute.get_name()), "An index has already been registered for {:?}", attribute);
         self.indexes.insert(attribute.get_name(), Box::new(index));

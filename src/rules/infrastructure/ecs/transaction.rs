@@ -34,10 +34,10 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
 
         if let Some(index) = pool.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
-                index.update_container(self.handle, &current_value, &self.new_value);
+                index.update_container_hook(self.handle, &current_value, &self.new_value);
             }
             else {
-                index.add_container(self.handle, &self.new_value);
+                index.add_container_hook(self.handle, &self.new_value);
             }
         }
 
@@ -188,15 +188,15 @@ mod test {
     }
 
     impl Index for TestIndex {
-        fn add_container(&mut self, handle: Handle, _new_value: &dyn AttributeValue) {
+        type AttributeValueType = u32;
+
+        fn add_container(&mut self, handle: Handle, _new_value: &u32) {
             self.handle = Some(handle);
         }
 
-        fn remove_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue) {
+        fn remove_container(&mut self, _handle: Handle, _old_value: &u32) {
             self.handle = None;
         }
-
-        fn update_container(&mut self, _handle: Handle, _old_value: &dyn AttributeValue, _new_value: &dyn AttributeValue) {}
     }
 
     #[test]
