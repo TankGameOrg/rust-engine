@@ -171,8 +171,8 @@ impl Pool {
     }
 
     /// Get an index which can be used to find one or more containers based on a specific attribute
-    pub fn get_index<T, IndexType: Index<AttributeValueType = T> + 'static>(&self, attribute: &Attribute<T>) -> Result<&IndexType, Box<dyn Error>>
-        where T: AttributeValue {
+    pub fn get_index<T, IndexType>(&self, attribute: &Attribute<T>) -> Result<&IndexType, Box<dyn Error>>
+        where T: AttributeValue, IndexType: Index<AttributeValueType = T> + 'static {
         match self.indexes.get(attribute.get_name()) {
             Some(index) => {
                 match index.as_ref().downcast_ref::<IndexType>() {
