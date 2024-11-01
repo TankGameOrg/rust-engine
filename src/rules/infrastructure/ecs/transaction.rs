@@ -5,6 +5,7 @@ use super::{
     pool::{Handle, Pool},
 };
 
+/// A modification to an attribute or container
 pub trait Modification {
     /// Modify the pool or one of it's attribute containers
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>>;
@@ -55,19 +56,19 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
 }
 
 /// Create a new container that can be accessed with the given Handle
-pub struct AddContainerModification {
+pub struct CreateContainerModification {
     handle: Handle,
 }
 
-impl AddContainerModification {
+impl CreateContainerModification {
     #[inline]
-    pub fn new() -> (Handle, AddContainerModification) {
+    pub fn new() -> (Handle, CreateContainerModification) {
         let handle = Handle::new();
-        (handle, AddContainerModification { handle })
+        (handle, CreateContainerModification { handle })
     }
 }
 
-impl Modification for AddContainerModification {
+impl Modification for CreateContainerModification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
         pool.add_attribute_container_with_handle(self.handle)?;
         Ok(())

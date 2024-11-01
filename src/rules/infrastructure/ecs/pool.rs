@@ -149,6 +149,7 @@ impl<F: Index> GenericIndex for F {
     }
 }
 
+/// The container and handle that matched an index or gather filter
 pub struct GatheredResult<'container> {
     pub handle: Handle,
     pub container: &'container AttributeContainer,

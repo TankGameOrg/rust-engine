@@ -1,3 +1,5 @@
+//! The entity component system used to represent all of the objects in the game 
+
 mod attribute;
 mod container;
 mod pool;
