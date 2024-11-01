@@ -125,7 +125,7 @@ macro_rules! create_container {
 
             let transaction: &mut $crate::rules::infrastructure::ecs::Transaction = $transaction;
 
-            let (handle, new_container_modification) = $crate::rules::infrastructure::ecs::AddContainerModification::new();
+            let (handle, new_container_modification) = $crate::rules::infrastructure::ecs::CreateContainerModification::new();
             transaction.add(new_container_modification);
 
             modify_container!(transaction, handle, {

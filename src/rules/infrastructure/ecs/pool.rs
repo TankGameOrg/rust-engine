@@ -172,7 +172,7 @@ impl Pool {
 
     /// Add an attribute container with an existing handle
     ///
-    /// This method exists to allow the AddContainerModification to return a handle when it's created even though the container
+    /// This method exists to allow the CreateContainerModification to return a handle when it's created even though the container
     /// itself hasn't been created yet
     #[inline]
     pub(super) fn add_attribute_container_with_handle(
