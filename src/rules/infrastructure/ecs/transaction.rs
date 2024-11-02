@@ -101,7 +101,7 @@ impl CreateContainerModification {
 
 impl Modification for CreateContainerModification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        pool.add_attribute_container_with_handle(self.handle)?;
+        pool.add_attribute_container(self.handle)?;
         Ok(())
     }
 }
@@ -156,7 +156,12 @@ impl Transaction {
     #[inline]
     pub fn apply(self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
         for modification in self.modifications {
-            modification.apply(pool)?;
+            let result = modification.apply(pool);
+
+            if result.is_err() {
+                pool.set_transaction_failed();
+                return result;
+            }
         }
 
         Ok(())
@@ -386,10 +391,11 @@ mod test {
         let mut pool = Pool::new();
         pool.add_index(&DUMMY_ATTRIBUTE, TestIndex::new());
 
-        let handle = pool.add_attribute_container();
+        let handle = Handle::new();
+        pool.add_attribute_container(handle).unwrap();
         modify_container_immidate!(&mut pool, handle, { DUMMY_ATTRIBUTE = 2 }).unwrap();
 
-        pool.add_attribute_container();
+        pool.add_attribute_container(Handle::new()).unwrap();
 
         let result = TestIndex::get(&pool).unwrap();
         assert_eq!(result, handle);
@@ -450,7 +456,8 @@ mod test {
         let mut pool = Pool::new();
         pool.add_index(&DUMMY_ATTRIBUTE, FailingIndex {});
 
-        let handle = pool.add_attribute_container();
+        let handle = Handle::new();
+        pool.add_attribute_container(handle).unwrap();
 
         let mut transaction = Transaction::new();
         modify_container!(&mut transaction, handle, { DUMMY_ATTRIBUTE = 2 });
@@ -462,5 +469,7 @@ mod test {
         let mut transaction = Transaction::new();
         transaction.add(RemoveContainerModification::new(handle));
         assert!(transaction.apply(&mut pool).is_err());
+
+        assert!(pool.get_attribute_container(handle).is_err());
     }
 }
