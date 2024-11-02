@@ -14,7 +14,7 @@ use super::attribute::{AnyAttribute, Attribute, AttributeValue};
 ///
 /// ```
 /// # use tank_game::rules::infrastructure::ecs::{Attribute, AttributeContainer};
-/// # let dummy_attribute = Attribute::<u32>::new("dummy_attribute");
+/// # static dummy_attribute: Attribute<u32> = Attribute::new("dummy_attribute");
 /// #
 /// let mut container = AttributeContainer::new();
 /// container.set(&dummy_attribute, 2);

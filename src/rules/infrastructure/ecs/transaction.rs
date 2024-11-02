@@ -106,6 +106,7 @@ impl Modification for CreateContainerModification {
     }
 }
 
+/// Remove a container for the pool
 pub struct RemoveContainerModification {
     handle: Handle,
 }
