@@ -13,7 +13,7 @@ use super::{
     entity::Entity,
 };
 
-/// A handle can be used to access and modify an Entity in a Pool
+/// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub struct Handle(usize);
 
@@ -156,34 +156,34 @@ pub struct GatheredResult<'entity> {
 }
 
 /// A collection of entities that can be queried by their attributes
-pub struct Pool {
+pub struct Universe {
     entities: HashMap<Handle, Entity>,
     indexes: HashMap<&'static dyn AnyAttribute, Box<dyn GenericIndex>>,
     is_valid: bool,
 }
 
-impl Pool {
+impl Universe {
     #[inline]
-    pub fn new() -> Pool {
-        Pool {
+    pub fn new() -> Universe {
+        Universe {
             entities: HashMap::new(),
             indexes: HashMap::new(),
             is_valid: true,
         }
     }
 
-    /// Verify that the none of the transactions applied to the pool failed and return an error if one has
+    /// Verify that the none of the transactions applied to the universe failed and return an error if one has
     #[inline]
     fn assert_validity(&self) -> Result<(), Box<dyn Error>> {
         if self.is_valid {
             Ok(())
         }
         else {
-            Err(Box::new(RuleError::Generic(String::from("A transaction failed to apply so this pool is no longer in a known good state"))))
+            Err(Box::new(RuleError::Generic(String::from("A transaction failed to apply so this universe is no longer in a known good state"))))
         }
     }
 
-    // Set the pool to an invalid state due to a transaction failing to apply
+    // Set the universe to an invalid state due to a transaction failing to apply
     pub(super) fn set_transaction_failed(&mut self) {
         self.is_valid = false;
     }
@@ -202,7 +202,7 @@ impl Pool {
         if self.entities.contains_key(&handle) {
             let current = self.entities.get(&handle).unwrap();
             return Err(Box::new(RuleError::Generic(format!(
-                "The handle {:?} already exists in this pool (current = {:?})",
+                "The handle {:?} already exists in this universe (current = {:?})",
                 handle, current
             ))));
         }
@@ -247,7 +247,7 @@ impl Pool {
             ))))
     }
 
-    /// Remove a entity from a pool
+    /// Remove a entity from a universe
     /// 
     /// If the handle does not exist return an error
     pub(super) fn remove_entity(&mut self, handle: Handle) -> Result<Entity, Box<dyn Error>> {
@@ -261,7 +261,7 @@ impl Pool {
         }
     }
 
-    /// Filter all of the entities in the pool and return an iterator to the ones that match
+    /// Filter all of the entities in the universe and return an iterator to the ones that match
     pub fn gather<'iter>(
         &'iter self,
         predicate: &'iter dyn Fn(&Entity) -> bool,
@@ -361,9 +361,9 @@ impl Pool {
     }
 }
 
-impl std::fmt::Debug for Pool {
+impl std::fmt::Debug for Universe {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Pool ")?;
+        f.write_str("Universe ")?;
         self.entities.fmt(f)
     }
 }
@@ -378,46 +378,46 @@ mod test {
 
     #[test]
     fn can_modify_and_retrieve_entities() {
-        let mut pool = Pool::new();
+        let mut universe = Universe::new();
         let handle = Handle::new();
-        pool.add_entity(handle).unwrap();
+        universe.add_entity(handle).unwrap();
 
-        let entity = pool.get_entity_mut(handle).unwrap();
+        let entity = universe.get_entity_mut(handle).unwrap();
         entity.set(&DUMMY_ATTRIBUTE, 2);
 
-        let entity = pool.get_entity(handle).unwrap();
+        let entity = universe.get_entity(handle).unwrap();
         assert_eq!(*entity.get(&DUMMY_ATTRIBUTE).unwrap(), 2);
     }
 
     #[test]
     fn can_add_a_entity_with_an_existing_handle() {
-        let mut pool = Pool::new();
+        let mut universe = Universe::new();
         let handle = Handle::new();
 
-        pool.add_entity(handle).unwrap();
-        pool.get_entity(handle).unwrap();
+        universe.add_entity(handle).unwrap();
+        universe.get_entity(handle).unwrap();
 
-        let error = pool.add_entity(handle);
+        let error = universe.add_entity(handle);
         assert!(error.is_err());
     }
 
     #[test]
     fn can_gather_entities() {
-        let mut pool = Pool::new();
+        let mut universe = Universe::new();
         let first_handle = Handle::new();
-        pool.add_entity(first_handle).unwrap();
-        let first = pool.get_entity_mut(first_handle).unwrap();
+        universe.add_entity(first_handle).unwrap();
+        let first = universe.get_entity_mut(first_handle).unwrap();
         first.set(&DUMMY_ATTRIBUTE, 2);
 
         let second_handle = Handle::new();
-        pool.add_entity(second_handle).unwrap();
-        let second = pool.get_entity_mut(second_handle).unwrap();
+        universe.add_entity(second_handle).unwrap();
+        let second = universe.get_entity_mut(second_handle).unwrap();
         second.set(&DUMMY_ATTRIBUTE, 1);
 
-        pool.add_entity(Handle::new()).unwrap();
+        universe.add_entity(Handle::new()).unwrap();
 
         // Gather one of the entities
-        let one: Vec<GatheredResult> = pool
+        let one: Vec<GatheredResult> = universe
             .gather(&|entity| {
                 *entity
                     .get(&DUMMY_ATTRIBUTE)
@@ -433,7 +433,7 @@ mod test {
         assert_eq!(*one[0].entity.get(&DUMMY_ATTRIBUTE).unwrap(), 1);
 
         // Gather both of the ones with attributes
-        let two: Vec<Handle> = pool
+        let two: Vec<Handle> = universe
             .gather(&|entity| entity.has(&DUMMY_ATTRIBUTE))
             .unwrap()
             .map(|result| result.handle)
@@ -447,22 +447,22 @@ mod test {
 
     #[test]
     fn can_gather_entities_from_handles() {
-        let mut pool = Pool::new();
+        let mut universe = Universe::new();
         let first_handle = Handle::new();
-        pool.add_entity(first_handle).unwrap();
+        universe.add_entity(first_handle).unwrap();
         let first: &mut Entity =
-            pool.get_entity_mut(first_handle).unwrap();
+            universe.get_entity_mut(first_handle).unwrap();
         first.set(&DUMMY_ATTRIBUTE, 2);
 
         let second_handle = Handle::new();
-        pool.add_entity(second_handle).unwrap();
-        let second = pool.get_entity_mut(second_handle).unwrap();
+        universe.add_entity(second_handle).unwrap();
+        let second = universe.get_entity_mut(second_handle).unwrap();
         second.set(&DUMMY_ATTRIBUTE, 1);
 
-        pool.add_entity(Handle::new()).unwrap();
+        universe.add_entity(Handle::new()).unwrap();
 
         // Gather two of the entities
-        let matches = pool
+        let matches = universe
             .gather_handles(vec![first_handle, second_handle].iter())
             .unwrap();
 
@@ -509,22 +509,22 @@ mod test {
     }
 
     #[test]
-    fn failed_transaction_invalidates_pool() {
-        let mut pool = Pool::new();
+    fn failed_transaction_invalidates_universe() {
+        let mut universe = Universe::new();
 
         let handle = Handle::new();
-        pool.add_entity(handle).unwrap();
-        pool.get_entity_mut(handle).unwrap().set(&DUMMY_ATTRIBUTE, 9);
+        universe.add_entity(handle).unwrap();
+        universe.get_entity_mut(handle).unwrap().set(&DUMMY_ATTRIBUTE, 9);
 
-        pool.set_transaction_failed();
+        universe.set_transaction_failed();
 
-        assert!(pool.add_entity(Handle::new()).is_err());
-        assert!(pool.get_entity(handle).is_err());
-        assert!(pool.get_entity_mut(handle).is_err());
-        assert!(pool.remove_entity(handle).is_err());
-        assert!(pool.gather(&|_c| true).is_err());
-        assert!(pool.gather_handles(vec![handle].iter()).is_err());
-        let result: Result<&DummyIndex, Box<dyn Error>> = pool.get_index(&DUMMY_ATTRIBUTE);
+        assert!(universe.add_entity(Handle::new()).is_err());
+        assert!(universe.get_entity(handle).is_err());
+        assert!(universe.get_entity_mut(handle).is_err());
+        assert!(universe.remove_entity(handle).is_err());
+        assert!(universe.gather(&|_c| true).is_err());
+        assert!(universe.gather_handles(vec![handle].iter()).is_err());
+        let result: Result<&DummyIndex, Box<dyn Error>> = universe.get_index(&DUMMY_ATTRIBUTE);
         assert!(result.is_err());
     }
 }

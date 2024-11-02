@@ -2,10 +2,10 @@
 
 mod attribute;
 mod entity;
-mod pool;
+mod universe;
 mod transaction;
 
 pub use attribute::{Attribute, AnyAttribute, AttributeValue};
 pub use entity::Entity;
-pub use pool::{GatheredResult, Handle, Index, Pool};
+pub use universe::{GatheredResult, Handle, Index, Universe};
 pub use transaction::*;

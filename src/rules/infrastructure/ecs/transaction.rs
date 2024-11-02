@@ -2,13 +2,13 @@ use std::error::Error;
 
 use super::{
     attribute::{Attribute, AttributeValue},
-    pool::{Handle, Pool},
+    universe::{Handle, Universe},
 };
 
 /// A modification to an attribute or entity
 pub trait Modification {
-    /// Modify the pool or one of it's Entities
-    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>>;
+    /// Modify the universe or one of it's Entities
+    fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>>;
 }
 
 /// Modify an attribute on the entity referenced by the handle
@@ -34,14 +34,14 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 }
 
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
-    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        let entity = pool.get_entity(self.handle)?;
+    fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
+        let entity = universe.get_entity(self.handle)?;
         let current_value = entity
             .get(self.attribute)
             .ok()
             .map(|value| value.clone());
 
-        if let Some(index) = pool.get_index_mut(self.attribute) {
+        if let Some(index) = universe.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
                 index.update_attribute_hook(self.handle, &current_value, &self.new_value)?;
             } else {
@@ -49,7 +49,7 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
             }
         }
 
-        pool.get_entity_mut(self.handle)?
+        universe.get_entity_mut(self.handle)?
             .set(self.attribute, self.new_value.clone());
         Ok(())
     }
@@ -72,15 +72,15 @@ impl<T: AttributeValue> UnsetAttributeModification<T> {
 }
 
 impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
-    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        let entity = pool.get_entity(self.handle)?;
+    fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
+        let entity = universe.get_entity(self.handle)?;
         let current_value = entity.get(self.attribute)?.clone();
 
-        if let Some(index) = pool.get_index_mut(self.attribute) {
+        if let Some(index) = universe.get_index_mut(self.attribute) {
             index.remove_attribute_hook(self.handle, &current_value)?;
         }
 
-        let entity = pool.get_entity_mut(self.handle)?;
+        let entity = universe.get_entity_mut(self.handle)?;
         entity.remove(self.attribute);
         Ok(())
     }
@@ -100,13 +100,13 @@ impl CreateEntityModification {
 }
 
 impl Modification for CreateEntityModification {
-    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        pool.add_entity(self.handle)?;
+    fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
+        universe.add_entity(self.handle)?;
         Ok(())
     }
 }
 
-/// Remove a entity for the pool
+/// Remove a entity for the universe
 pub struct RemoveEntityModification {
     handle: Handle,
 }
@@ -121,11 +121,11 @@ impl RemoveEntityModification {
 }
 
 impl Modification for RemoveEntityModification {
-    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
-        let entity = pool.remove_entity(self.handle)?;
+    fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
+        let entity = universe.remove_entity(self.handle)?;
 
         for (attribute, attribute_value) in entity.iter() {
-            if let Some(index) = pool.get_index_mut(attribute) {
+            if let Some(index) = universe.get_index_mut(attribute) {
                 index.remove_attribute_hook(self.handle, attribute_value)?;
             }
         }
@@ -134,7 +134,7 @@ impl Modification for RemoveEntityModification {
     }
 }
 
-/// A series of modifications that can be applied to a pool
+/// A series of modifications that can be applied to a universe
 pub struct Transaction {
     modifications: Vec<Box<dyn Modification>>,
 }
@@ -155,12 +155,12 @@ impl Transaction {
 
     /// Apply the modifications in the order they were added in
     #[inline]
-    pub fn apply(self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
+    pub fn apply(self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         for modification in self.modifications {
-            let result = modification.apply(pool);
+            let result = modification.apply(universe);
 
             if result.is_err() {
-                pool.set_transaction_failed();
+                universe.set_transaction_failed();
                 return result;
             }
         }
@@ -260,29 +260,29 @@ macro_rules! modify_attribute {
 /// 
 /// ```
 /// # use std::error::Error;
-/// # use tank_game::rules::infrastructure::ecs::{Attribute, Pool};
+/// # use tank_game::rules::infrastructure::ecs::{Attribute, Universe};
 /// # use tank_game::create_entity_immidate;
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
-/// let mut pool = Pool::new();
-/// let new_handle = create_entity_immidate!(&mut pool, {
+/// let mut universe = Universe::new();
+/// let new_handle = create_entity_immidate!(&mut universe, {
 ///     dummy_attribute = 3
 /// })?;
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 #[macro_export]
 macro_rules! create_entity_immidate {
-    ($pool:expr, $($token:tt)*) => {
+    ($universe:expr, $($token:tt)*) => {
         {
             use $crate::create_entity;
             use $crate::rules::infrastructure::ecs::Transaction;
 
-            let pool: &mut Pool = $pool;
+            let universe: &mut Universe = $universe;
             let mut transaction = Transaction::new();
 
             let handle = create_entity!(&mut transaction, $($token)*);
 
-            match transaction.apply(pool) {
+            match transaction.apply(universe) {
                 Ok(()) => Ok(handle),
                 Err(err) => Err(err),
             }
@@ -294,30 +294,30 @@ macro_rules! create_entity_immidate {
 /// 
 /// ```
 /// # use std::error::Error;
-/// # use tank_game::rules::infrastructure::ecs::{Attribute, Pool};
+/// # use tank_game::rules::infrastructure::ecs::{Attribute, Universe};
 /// # use tank_game::{create_entity_immidate, modify_entity_immidate};
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
-/// let mut pool = Pool::new();
-/// # let dummy_handle = create_entity_immidate!(&mut pool, { dummy_attribute = 3 })?;
-/// modify_entity_immidate!(&mut pool, dummy_handle, {
+/// let mut universe = Universe::new();
+/// # let dummy_handle = create_entity_immidate!(&mut universe, { dummy_attribute = 3 })?;
+/// modify_entity_immidate!(&mut universe, dummy_handle, {
 ///     dummy_attribute = 3
 /// })?;
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
 #[macro_export]
 macro_rules! modify_entity_immidate {
-    ($pool:expr, $($token:tt)*) => {
+    ($universe:expr, $($token:tt)*) => {
         {
             use $crate::modify_entity;
             use $crate::rules::infrastructure::ecs::Transaction;
 
-            let pool: &mut Pool = $pool;
+            let universe: &mut Universe = $universe;
             let mut transaction = Transaction::new();
 
             modify_entity!(&mut transaction, $($token)*);
 
-            transaction.apply(pool)
+            transaction.apply(universe)
         }
     };
 }
@@ -327,7 +327,7 @@ mod test {
     use std::error::Error;
 
     use crate::rules::infrastructure::{
-        ecs::{attribute::DUMMY_ATTRIBUTE, pool::Index},
+        ecs::{attribute::DUMMY_ATTRIBUTE, universe::Index},
         RuleError,
     };
 
@@ -335,13 +335,13 @@ mod test {
 
     #[test]
     fn transaction_test() {
-        let mut pool = Pool::new();
+        let mut universe = Universe::new();
 
-        let handle = create_entity_immidate!(&mut pool, { DUMMY_ATTRIBUTE = 2 }).unwrap();
-        assert_eq!(*pool.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).unwrap(), 2);
+        let handle = create_entity_immidate!(&mut universe, { DUMMY_ATTRIBUTE = 2 }).unwrap();
+        assert_eq!(*universe.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).unwrap(), 2);
 
-        modify_entity_immidate!(&mut pool, handle, { unset DUMMY_ATTRIBUTE }).unwrap();
-        assert!(pool.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).is_err());
+        modify_entity_immidate!(&mut universe, handle, { unset DUMMY_ATTRIBUTE }).unwrap();
+        assert!(universe.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).is_err());
     }
 
     struct TestIndex {
@@ -353,8 +353,8 @@ mod test {
             return TestIndex { handle: None };
         }
 
-        fn get<'iter>(pool: &'iter Pool) -> Result<Handle, Box<dyn Error>> {
-            let index: &TestIndex = pool.get_index(&DUMMY_ATTRIBUTE)?;
+        fn get<'iter>(universe: &'iter Universe) -> Result<Handle, Box<dyn Error>> {
+            let index: &TestIndex = universe.get_index(&DUMMY_ATTRIBUTE)?;
 
             match index.handle {
                 None => Err(Box::new(RuleError::Generic(String::from(
@@ -389,23 +389,23 @@ mod test {
 
     #[test]
     fn index_test() {
-        let mut pool = Pool::new();
-        pool.add_index(&DUMMY_ATTRIBUTE, TestIndex::new());
+        let mut universe = Universe::new();
+        universe.add_index(&DUMMY_ATTRIBUTE, TestIndex::new());
 
         let handle = Handle::new();
-        pool.add_entity(handle).unwrap();
-        modify_entity_immidate!(&mut pool, handle, { DUMMY_ATTRIBUTE = 2 }).unwrap();
+        universe.add_entity(handle).unwrap();
+        modify_entity_immidate!(&mut universe, handle, { DUMMY_ATTRIBUTE = 2 }).unwrap();
 
-        pool.add_entity(Handle::new()).unwrap();
+        universe.add_entity(Handle::new()).unwrap();
 
-        let result = TestIndex::get(&pool).unwrap();
+        let result = TestIndex::get(&universe).unwrap();
         assert_eq!(result, handle);
 
         let mut transaction = Transaction::new();
         transaction.add(RemoveEntityModification::new(handle));
-        transaction.apply(&mut pool).unwrap();
+        transaction.apply(&mut universe).unwrap();
 
-        let result = TestIndex::get(&pool);
+        let result = TestIndex::get(&universe);
         assert!(result.is_err());
     }
 
@@ -454,23 +454,23 @@ mod test {
 
     #[test]
     fn failing_index() {
-        let mut pool = Pool::new();
-        pool.add_index(&DUMMY_ATTRIBUTE, FailingIndex {});
+        let mut universe = Universe::new();
+        universe.add_index(&DUMMY_ATTRIBUTE, FailingIndex {});
 
         let handle = Handle::new();
-        pool.add_entity(handle).unwrap();
+        universe.add_entity(handle).unwrap();
 
         let mut transaction = Transaction::new();
         modify_entity!(&mut transaction, handle, { DUMMY_ATTRIBUTE = 2 });
 
-        transaction.apply(&mut pool).unwrap();
+        transaction.apply(&mut universe).unwrap();
 
         unsafe { FAILING_INDEX_FAILS = true; }
 
         let mut transaction = Transaction::new();
         transaction.add(RemoveEntityModification::new(handle));
-        assert!(transaction.apply(&mut pool).is_err());
+        assert!(transaction.apply(&mut universe).is_err());
 
-        assert!(pool.get_entity(handle).is_err());
+        assert!(universe.get_entity(handle).is_err());
     }
 }
