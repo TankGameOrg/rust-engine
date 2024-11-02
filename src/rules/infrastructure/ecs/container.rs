@@ -8,7 +8,7 @@ use as_any::Downcast;
 
 use crate::rules::infrastructure::RuleError;
 
-use super::attribute::{Attribute, AttributeValue};
+use super::attribute::{AnyAttribute, Attribute, AttributeValue};
 
 /// A generic container for storing keys of different types
 ///
@@ -23,7 +23,7 @@ use super::attribute::{Attribute, AttributeValue};
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AttributeContainer {
-    attributes: HashMap<&'static str, Box<dyn AttributeValue>>,
+    attributes: HashMap<&'static dyn AnyAttribute, Box<dyn AttributeValue>>,
 }
 
 impl AttributeContainer {
@@ -37,7 +37,7 @@ impl AttributeContainer {
 
     /// Get the attribute value from the container
     pub fn get<T: AttributeValue>(&self, key: &Attribute<T>) -> Result<&T, Box<dyn Error>> {
-        match self.attributes.get(key.get_name()) {
+        match self.attributes.get(key as &dyn AnyAttribute) {
             Some(any) => match any.as_ref().downcast_ref::<T>() {
                 Some(value) => Ok(value),
                 None => {
@@ -57,28 +57,28 @@ impl AttributeContainer {
 
     /// Store the value of the attribute in the container
     #[inline]
-    pub fn set<T: AttributeValue>(&mut self, key: &Attribute<T>, value: T) {
-        self.attributes.insert(key.get_name(), Box::new(value));
+    pub fn set<T: AttributeValue>(&mut self, key: &'static Attribute<T>, value: T) {
+        self.attributes.insert(key, Box::new(value));
     }
 
     /// Check if this container has the specified attribute
     #[inline]
-    pub fn has<T: AttributeValue>(&self, key: &Attribute<T>) -> bool {
-        self.attributes.contains_key(key.get_name())
+    pub fn has(&self, key: &dyn AnyAttribute) -> bool {
+        self.attributes.contains_key(key as &dyn AnyAttribute)
     }
 
     /// Remove an attribute from this container
     #[inline]
-    pub fn remove<T: AttributeValue>(&mut self, key: &Attribute<T>) {
-        self.attributes.remove(&key.get_name());
+    pub fn remove(&mut self, key: &dyn AnyAttribute) {
+        self.attributes.remove(key);
     }
 
     /// Iterate the attributes stored in the container
     // TODO: Proper IntoIter
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &dyn AttributeValue)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)> {
         self.attributes.iter()
-            .map(|(attribute_name, attribute_value)| (*attribute_name, attribute_value.as_ref()))
+            .map(|(attribute, attribute_value)| (*attribute, attribute_value.as_ref()))
     }
 }
 

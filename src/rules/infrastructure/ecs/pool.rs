@@ -9,7 +9,7 @@ use as_any::{AsAny, Downcast};
 use crate::rules::infrastructure::error::RuleError;
 
 use super::{
-    attribute::{Attribute, AttributeValue},
+    attribute::{AnyAttribute, Attribute, AttributeValue},
     container::AttributeContainer,
 };
 
@@ -158,7 +158,7 @@ pub struct GatheredResult<'container> {
 /// A collection of attribute containers that can be queried by their attributes
 pub struct Pool {
     containers: HashMap<Handle, AttributeContainer>,
-    indexes: HashMap<&'static str, Box<dyn GenericIndex>>,
+    indexes: HashMap<&'static dyn AnyAttribute, Box<dyn GenericIndex>>,
     is_valid: bool,
 }
 
@@ -306,7 +306,7 @@ impl Pool {
     {
         self.assert_validity()?;
 
-        match self.indexes.get(attribute.get_name()) {
+        match self.indexes.get(attribute as &dyn AnyAttribute) {
             Some(index) => match index.as_ref().downcast_ref::<IndexType>() {
                 Some(index) => Ok(index),
                 None => Err(Box::new(RuleError::Generic(format!(
@@ -327,10 +327,10 @@ impl Pool {
     #[inline]
     pub(super) fn get_index_mut(
         &mut self,
-        attribute_name: &'static str,
+        attribute: &dyn AnyAttribute,
     ) -> Option<&mut Box<dyn GenericIndex>> {
         if self.is_valid {
-            self.indexes.get_mut(attribute_name)
+            self.indexes.get_mut(attribute)
         }
         else {
             None
@@ -343,7 +343,7 @@ impl Pool {
     #[inline]
     pub fn add_index<T: AttributeValue>(
         &mut self,
-        attribute: &Attribute<T>,
+        attribute: &'static Attribute<T>,
         index: impl Index<AttributeValueType = T> + 'static,
     ) {
         self.assert_validity().unwrap();
@@ -353,11 +353,11 @@ impl Pool {
             attribute
         );
         assert!(
-            !self.indexes.contains_key(attribute.get_name()),
+            !self.indexes.contains_key(attribute as &dyn AnyAttribute),
             "An index has already been registered for {:?}",
             attribute
         );
-        self.indexes.insert(attribute.get_name(), Box::new(index));
+        self.indexes.insert(attribute, Box::new(index));
     }
 }
 

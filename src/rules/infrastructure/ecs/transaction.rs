@@ -41,7 +41,7 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
             .ok()
             .map(|value| value.clone());
 
-        if let Some(index) = pool.get_index_mut(self.attribute.get_name()) {
+        if let Some(index) = pool.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
                 index.update_container_hook(self.handle, &current_value, &self.new_value)?;
             } else {
@@ -76,7 +76,7 @@ impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
         let container = pool.get_attribute_container(self.handle)?;
         let current_value = container.get(self.attribute)?.clone();
 
-        if let Some(index) = pool.get_index_mut(self.attribute.get_name()) {
+        if let Some(index) = pool.get_index_mut(self.attribute) {
             index.remove_container_hook(self.handle, &current_value)?;
         }
 
@@ -123,8 +123,8 @@ impl Modification for RemoveContainerModification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
         let container = pool.remove_container(self.handle)?;
 
-        for (attribute_name, attribute_value) in container.iter() {
-            if let Some(index) = pool.get_index_mut(attribute_name) {
+        for (attribute, attribute_value) in container.iter() {
+            if let Some(index) = pool.get_index_mut(attribute) {
                 index.remove_container_hook(self.handle, attribute_value)?;
             }
         }
