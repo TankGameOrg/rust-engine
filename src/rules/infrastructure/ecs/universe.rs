@@ -31,7 +31,7 @@ impl AttributeValue for Handle {}
 /// GenericIndex is the internal, boxable, representation of an index
 ///
 /// It allows us to store Indexes with multiple AttributeValue types in the same HashMap
-pub(super) trait GenericIndex: AsAny {
+pub(super) trait AnyIndex: AsAny {
     fn add_attribute_hook(
         &mut self,
         handle: Handle,
@@ -90,7 +90,7 @@ pub trait Index: AsAny {
     ) -> Result<(), Box<dyn Error>>;
 }
 
-impl<F: Index> GenericIndex for F {
+impl<F: Index> AnyIndex for F {
     fn add_attribute_hook(
         &mut self,
         handle: Handle,
@@ -158,7 +158,7 @@ pub struct GatheredResult<'entity> {
 /// A collection of entities that can be queried by their attributes
 pub struct Universe {
     entities: HashMap<Handle, Entity>,
-    indexes: HashMap<&'static dyn AnyAttribute, Box<dyn GenericIndex>>,
+    indexes: HashMap<&'static dyn AnyAttribute, Box<dyn AnyIndex>>,
     is_valid: bool,
 }
 
@@ -328,7 +328,7 @@ impl Universe {
     pub(super) fn get_index_mut(
         &mut self,
         attribute: &dyn AnyAttribute,
-    ) -> Option<&mut Box<dyn GenericIndex>> {
+    ) -> Option<&mut Box<dyn AnyIndex>> {
         if self.is_valid {
             self.indexes.get_mut(attribute)
         }
