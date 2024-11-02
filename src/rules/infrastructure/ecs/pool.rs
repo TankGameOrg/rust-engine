@@ -10,10 +10,10 @@ use crate::rules::infrastructure::error::RuleError;
 
 use super::{
     attribute::{AnyAttribute, Attribute, AttributeValue},
-    container::AttributeContainer,
+    entity::Entity,
 };
 
-/// A handle can be used to access and modify an AttributeContainer in a Pool
+/// A handle can be used to access and modify an Entity in a Pool
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub struct Handle(usize);
 
@@ -32,25 +32,25 @@ impl AttributeValue for Handle {}
 ///
 /// It allows us to store Indexes with multiple AttributeValue types in the same HashMap
 pub(super) trait GenericIndex: AsAny {
-    fn add_container_hook(
+    fn add_attribute_hook(
         &mut self,
         handle: Handle,
         new_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
-    fn update_container_hook(
+    fn update_attribute_hook(
         &mut self,
         handle: Handle,
         old_value: &dyn AttributeValue,
         new_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
-    fn remove_container_hook(
+    fn remove_attribute_hook(
         &mut self,
         handle: Handle,
         old_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
 }
 
-/// A type that can optimize searches for containers with a specified attribute
+/// A type that can optimize searches for entities with a specified attribute
 ///
 /// The Index trait provides a set of methods to update the index when an attribute changes
 /// but it does not provide an api for querying the index.  It is assumed that users will downcast
@@ -58,10 +58,10 @@ pub(super) trait GenericIndex: AsAny {
 pub trait Index: AsAny {
     type AttributeValueType;
 
-    /// Start tracking a container after the attribute this index tracks has been added to it
+    /// Start tracking a entity after the attribute this index tracks has been added to it
     ///
-    /// If an error is returned, the transaction that triggered the container add will not be applied
-    fn add_container(
+    /// If an error is returned, the transaction that triggered the entity add will not be applied
+    fn add_attribute(
         &mut self,
         handle: Handle,
         new_value: &Self::AttributeValueType,
@@ -69,21 +69,21 @@ pub trait Index: AsAny {
 
     /// The value of the attribute that this index tracks has been updated
     ///
-    /// If an error is returned, the transaction that triggered the container update will not be applied
-    fn update_container(
+    /// If an error is returned, the transaction that triggered the entity update will not be applied
+    fn update_attribute(
         &mut self,
         handle: Handle,
         old_value: &Self::AttributeValueType,
         new_value: &Self::AttributeValueType,
     ) -> Result<(), Box<dyn Error>> {
-        self.remove_container(handle, old_value)?;
-        self.add_container(handle, new_value)
+        self.remove_attribute(handle, old_value)?;
+        self.add_attribute(handle, new_value)
     }
 
-    /// Stop tracking a container after the attribute this index tracks was removed
+    /// Stop tracking a entity after the attribute this index tracks was removed
     ///
-    /// If an error is returned, the transaction that triggered the container remove will not still be applied
-    fn remove_container(
+    /// If an error is returned, the transaction that triggered the entity remove will not still be applied
+    fn remove_attribute(
         &mut self,
         handle: Handle,
         old_value: &Self::AttributeValueType,
@@ -91,7 +91,7 @@ pub trait Index: AsAny {
 }
 
 impl<F: Index> GenericIndex for F {
-    fn add_container_hook(
+    fn add_attribute_hook(
         &mut self,
         handle: Handle,
         new_value: &dyn AttributeValue,
@@ -104,10 +104,10 @@ impl<F: Index> GenericIndex for F {
                 new_value.type_id()
             ))))?;
 
-        self.add_container(handle, new_value)
+        self.add_attribute(handle, new_value)
     }
 
-    fn update_container_hook(
+    fn update_attribute_hook(
         &mut self,
         handle: Handle,
         old_value: &dyn AttributeValue,
@@ -129,10 +129,10 @@ impl<F: Index> GenericIndex for F {
                 new_value.type_id()
             ))))?;
 
-        self.update_container(handle, old_value, new_value)
+        self.update_attribute(handle, old_value, new_value)
     }
 
-    fn remove_container_hook(
+    fn remove_attribute_hook(
         &mut self,
         handle: Handle,
         old_value: &dyn AttributeValue,
@@ -145,19 +145,19 @@ impl<F: Index> GenericIndex for F {
                 old_value.type_id()
             ))))?;
 
-        self.remove_container(handle, old_value)
+        self.remove_attribute(handle, old_value)
     }
 }
 
-/// The container and handle that matched an index or gather filter
-pub struct GatheredResult<'container> {
+/// The entity and handle that matched an index or gather filter
+pub struct GatheredResult<'entity> {
     pub handle: Handle,
-    pub container: &'container AttributeContainer,
+    pub entity: &'entity Entity,
 }
 
-/// A collection of attribute containers that can be queried by their attributes
+/// A collection of entities that can be queried by their attributes
 pub struct Pool {
-    containers: HashMap<Handle, AttributeContainer>,
+    entities: HashMap<Handle, Entity>,
     indexes: HashMap<&'static dyn AnyAttribute, Box<dyn GenericIndex>>,
     is_valid: bool,
 }
@@ -166,7 +166,7 @@ impl Pool {
     #[inline]
     pub fn new() -> Pool {
         Pool {
-            containers: HashMap::new(),
+            entities: HashMap::new(),
             indexes: HashMap::new(),
             is_valid: true,
         }
@@ -188,98 +188,98 @@ impl Pool {
         self.is_valid = false;
     }
 
-    /// Add an attribute container with an existing handle
+    /// Add an Entity with an existing handle
     ///
-    /// This method exists to allow the CreateContainerModification to return a handle when it's created even though the container
+    /// This method exists to allow the CreateEntityModification to return a handle when it's created even though the entity
     /// itself hasn't been created yet
     #[inline]
-    pub(super) fn add_attribute_container(
+    pub(super) fn add_entity(
         &mut self,
         handle: Handle,
     ) -> Result<(), Box<dyn Error>> {
         self.assert_validity()?;
 
-        if self.containers.contains_key(&handle) {
-            let current = self.containers.get(&handle).unwrap();
+        if self.entities.contains_key(&handle) {
+            let current = self.entities.get(&handle).unwrap();
             return Err(Box::new(RuleError::Generic(format!(
                 "The handle {:?} already exists in this pool (current = {:?})",
                 handle, current
             ))));
         }
 
-        self.containers.insert(handle, AttributeContainer::new());
+        self.entities.insert(handle, Entity::new());
         Ok(())
     }
 
-    /// Get the attribute container pointed to by a handle
+    /// Get the Entity pointed to by a handle
     ///
-    /// If the container does not exist we return an error
+    /// If the entity does not exist we return an error
     #[inline]
-    pub fn get_attribute_container(
+    pub fn get_entity(
         &self,
         handle: Handle,
-    ) -> Result<&AttributeContainer, Box<dyn Error>> {
+    ) -> Result<&Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
-        self.containers
+        self.entities
             .get(&handle)
             .ok_or(Box::new(RuleError::Generic(format!(
-                "Attribute container for {:?} does not exist",
+                "Entity for {:?} does not exist",
                 handle
             ))))
     }
 
-    /// Get a mutable reference to the attribute container pointed to by a haandle
+    /// Get a mutable reference to the Entity pointed to by a haandle
     ///
-    /// If the container does not exist we return an error
+    /// If the entity does not exist we return an error
     #[inline]
-    pub(super) fn get_attribute_container_mut(
+    pub(super) fn get_entity_mut(
         &mut self,
         handle: Handle,
-    ) -> Result<&mut AttributeContainer, Box<dyn Error>> {
+    ) -> Result<&mut Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
-        self.containers
+        self.entities
             .get_mut(&handle)
             .ok_or(Box::new(RuleError::Generic(format!(
-                "Attribute container for {:?} does not exist",
+                "Entity for {:?} does not exist",
                 handle
             ))))
     }
 
-    /// Remove a container from a pool
+    /// Remove a entity from a pool
     /// 
     /// If the handle does not exist return an error
-    pub(super) fn remove_container(&mut self, handle: Handle) -> Result<AttributeContainer, Box<dyn Error>> {
+    pub(super) fn remove_entity(&mut self, handle: Handle) -> Result<Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
-        let optional_container = self.containers.remove(&handle);
+        let optional_entity = self.entities.remove(&handle);
 
-        match optional_container {
-            None => Err(Box::new(RuleError::Generic(format!("The handle {:?} does not reference a valid container", handle)))),
-            Some(container) => Ok(container),
+        match optional_entity {
+            None => Err(Box::new(RuleError::Generic(format!("The handle {:?} does not reference a valid entity", handle)))),
+            Some(entity) => Ok(entity),
         }
     }
 
-    /// Filter all of the containers in the pool and return an iterator to the ones that match
+    /// Filter all of the entities in the pool and return an iterator to the ones that match
     pub fn gather<'iter>(
         &'iter self,
-        predicate: &'iter dyn Fn(&AttributeContainer) -> bool,
+        predicate: &'iter dyn Fn(&Entity) -> bool,
     ) -> Result<impl Iterator<Item = GatheredResult<'iter>>, Box<dyn Error>> {
         self.assert_validity()?;
 
-        Ok(self.containers
+        Ok(self.entities
             .iter()
-            .filter(|(_, container)| predicate(*container))
-            .map(|(handle, container)| GatheredResult {
+            .filter(|(_, entity)| predicate(*entity))
+            .map(|(handle, entity)| GatheredResult {
                 handle: *handle,
-                container,
+                entity,
             }))
     }
 
-    /// Gather the containers assosiated with an iterable of handles
+    /// Gather the entities assosiated with an iterable of handles
     ///
-    /// Return an error if any of the containers doesn't exist
+    /// Return an error if any of the entities doesn't exist
     pub fn gather_handles<'iter>(
         &self,
         iter: impl Iterator<Item = &'iter Handle>,
@@ -289,13 +289,13 @@ impl Pool {
         iter.map(|handle| {
             Ok(GatheredResult {
                 handle: *handle,
-                container: self.get_attribute_container(*handle)?,
+                entity: self.get_entity(*handle)?,
             })
         })
         .collect()
     }
 
-    /// Get an index which can be used to find one or more containers based on a specific attribute
+    /// Get an index which can be used to find one or more entities based on a specific attribute
     pub fn get_index<T, IndexType>(
         &self,
         attribute: &Attribute<T>,
@@ -323,7 +323,7 @@ impl Pool {
         }
     }
 
-    /// Get a mutable refrence to an index to update it to handle a modification to a container
+    /// Get a mutable refrence to an index to update it to handle a modification to a entity
     #[inline]
     pub(super) fn get_index_mut(
         &mut self,
@@ -337,9 +337,9 @@ impl Pool {
         }
     }
 
-    /// Add an index to optimize queries for containers with a specific attribute
+    /// Add an index to optimize queries for entities with a specific attribute
     ///
-    /// All indexes must be added before any containers are and each attribute can only have one index
+    /// All indexes must be added before any entities are and each attribute can only have one index
     #[inline]
     pub fn add_index<T: AttributeValue>(
         &mut self,
@@ -348,8 +348,8 @@ impl Pool {
     ) {
         self.assert_validity().unwrap();
         assert!(
-            self.containers.len() == 0,
-            "Index for {:?} was added after containers had been added",
+            self.entities.len() == 0,
+            "Index for {:?} was added after entities had been added",
             attribute
         );
         assert!(
@@ -364,7 +364,7 @@ impl Pool {
 impl std::fmt::Debug for Pool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Pool ")?;
-        self.containers.fmt(f)
+        self.entities.fmt(f)
     }
 }
 
@@ -377,49 +377,49 @@ mod test {
     use super::*;
 
     #[test]
-    fn can_modify_and_retrieve_containers() {
+    fn can_modify_and_retrieve_entities() {
         let mut pool = Pool::new();
         let handle = Handle::new();
-        pool.add_attribute_container(handle).unwrap();
+        pool.add_entity(handle).unwrap();
 
-        let container = pool.get_attribute_container_mut(handle).unwrap();
-        container.set(&DUMMY_ATTRIBUTE, 2);
+        let entity = pool.get_entity_mut(handle).unwrap();
+        entity.set(&DUMMY_ATTRIBUTE, 2);
 
-        let container = pool.get_attribute_container(handle).unwrap();
-        assert_eq!(*container.get(&DUMMY_ATTRIBUTE).unwrap(), 2);
+        let entity = pool.get_entity(handle).unwrap();
+        assert_eq!(*entity.get(&DUMMY_ATTRIBUTE).unwrap(), 2);
     }
 
     #[test]
-    fn can_add_a_container_with_an_existing_handle() {
+    fn can_add_a_entity_with_an_existing_handle() {
         let mut pool = Pool::new();
         let handle = Handle::new();
 
-        pool.add_attribute_container(handle).unwrap();
-        pool.get_attribute_container(handle).unwrap();
+        pool.add_entity(handle).unwrap();
+        pool.get_entity(handle).unwrap();
 
-        let error = pool.add_attribute_container(handle);
+        let error = pool.add_entity(handle);
         assert!(error.is_err());
     }
 
     #[test]
-    fn can_gather_containers() {
+    fn can_gather_entities() {
         let mut pool = Pool::new();
         let first_handle = Handle::new();
-        pool.add_attribute_container(first_handle).unwrap();
-        let first = pool.get_attribute_container_mut(first_handle).unwrap();
+        pool.add_entity(first_handle).unwrap();
+        let first = pool.get_entity_mut(first_handle).unwrap();
         first.set(&DUMMY_ATTRIBUTE, 2);
 
         let second_handle = Handle::new();
-        pool.add_attribute_container(second_handle).unwrap();
-        let second = pool.get_attribute_container_mut(second_handle).unwrap();
+        pool.add_entity(second_handle).unwrap();
+        let second = pool.get_entity_mut(second_handle).unwrap();
         second.set(&DUMMY_ATTRIBUTE, 1);
 
-        pool.add_attribute_container(Handle::new()).unwrap();
+        pool.add_entity(Handle::new()).unwrap();
 
-        // Gather one of the containers
+        // Gather one of the entities
         let one: Vec<GatheredResult> = pool
-            .gather(&|container| {
-                *container
+            .gather(&|entity| {
+                *entity
                     .get(&DUMMY_ATTRIBUTE)
                     .or_else(|_| -> Result<&u32, Box<dyn Error>> { Ok(&5) })
                     .unwrap()
@@ -430,11 +430,11 @@ mod test {
 
         assert_eq!(one.len(), 1);
         assert_eq!(one[0].handle, second_handle);
-        assert_eq!(*one[0].container.get(&DUMMY_ATTRIBUTE).unwrap(), 1);
+        assert_eq!(*one[0].entity.get(&DUMMY_ATTRIBUTE).unwrap(), 1);
 
         // Gather both of the ones with attributes
         let two: Vec<Handle> = pool
-            .gather(&|container| container.has(&DUMMY_ATTRIBUTE))
+            .gather(&|entity| entity.has(&DUMMY_ATTRIBUTE))
             .unwrap()
             .map(|result| result.handle)
             .collect();
@@ -446,22 +446,22 @@ mod test {
     }
 
     #[test]
-    fn can_gather_containers_from_handles() {
+    fn can_gather_entities_from_handles() {
         let mut pool = Pool::new();
         let first_handle = Handle::new();
-        pool.add_attribute_container(first_handle).unwrap();
-        let first: &mut AttributeContainer =
-            pool.get_attribute_container_mut(first_handle).unwrap();
+        pool.add_entity(first_handle).unwrap();
+        let first: &mut Entity =
+            pool.get_entity_mut(first_handle).unwrap();
         first.set(&DUMMY_ATTRIBUTE, 2);
 
         let second_handle = Handle::new();
-        pool.add_attribute_container(second_handle).unwrap();
-        let second = pool.get_attribute_container_mut(second_handle).unwrap();
+        pool.add_entity(second_handle).unwrap();
+        let second = pool.get_entity_mut(second_handle).unwrap();
         second.set(&DUMMY_ATTRIBUTE, 1);
 
-        pool.add_attribute_container(Handle::new()).unwrap();
+        pool.add_entity(Handle::new()).unwrap();
 
-        // Gather two of the containers
+        // Gather two of the entities
         let matches = pool
             .gather_handles(vec![first_handle, second_handle].iter())
             .unwrap();
@@ -474,7 +474,7 @@ mod test {
 
         let attributes: Vec<u32> = matches
             .iter()
-            .map(|result| *result.container.get(&DUMMY_ATTRIBUTE).unwrap())
+            .map(|result| *result.entity.get(&DUMMY_ATTRIBUTE).unwrap())
             .collect();
         assert!(attributes.contains(&1));
         assert!(attributes.contains(&2));
@@ -484,21 +484,21 @@ mod test {
 
     impl Index for DummyIndex {
         type AttributeValueType = u32;
-        fn add_container(
+        fn add_attribute(
                 &mut self,
                 _handle: Handle,
                 _new_value: &Self::AttributeValueType,
             ) -> Result<(), Box<dyn Error>> {
                 Ok(())
             }
-        fn remove_container(
+        fn remove_attribute(
                 &mut self,
                 _handle: Handle,
                 _old_value: &Self::AttributeValueType,
             ) -> Result<(), Box<dyn Error>> {
                 Ok(())
             }
-        fn update_container(
+        fn update_attribute(
                 &mut self,
                 _handle: Handle,
                 _old_value: &Self::AttributeValueType,
@@ -513,15 +513,15 @@ mod test {
         let mut pool = Pool::new();
 
         let handle = Handle::new();
-        pool.add_attribute_container(handle).unwrap();
-        pool.get_attribute_container_mut(handle).unwrap().set(&DUMMY_ATTRIBUTE, 9);
+        pool.add_entity(handle).unwrap();
+        pool.get_entity_mut(handle).unwrap().set(&DUMMY_ATTRIBUTE, 9);
 
         pool.set_transaction_failed();
 
-        assert!(pool.add_attribute_container(Handle::new()).is_err());
-        assert!(pool.get_attribute_container(handle).is_err());
-        assert!(pool.get_attribute_container_mut(handle).is_err());
-        assert!(pool.remove_container(handle).is_err());
+        assert!(pool.add_entity(Handle::new()).is_err());
+        assert!(pool.get_entity(handle).is_err());
+        assert!(pool.get_entity_mut(handle).is_err());
+        assert!(pool.remove_entity(handle).is_err());
         assert!(pool.gather(&|_c| true).is_err());
         assert!(pool.gather_handles(vec![handle].iter()).is_err());
         let result: Result<&DummyIndex, Box<dyn Error>> = pool.get_index(&DUMMY_ATTRIBUTE);
