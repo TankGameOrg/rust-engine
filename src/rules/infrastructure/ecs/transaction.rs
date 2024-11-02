@@ -41,7 +41,7 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
             .ok()
             .map(|value| value.clone());
 
-        if let Some(index) = pool.get_index_mut(self.attribute) {
+        if let Some(index) = pool.get_index_mut(self.attribute.get_name()) {
             if let Some(current_value) = current_value {
                 index.update_container_hook(self.handle, &current_value, &self.new_value)?;
             } else {
@@ -51,6 +51,37 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
 
         pool.get_attribute_container_mut(self.handle)?
             .set(self.attribute, self.new_value.clone());
+        Ok(())
+    }
+}
+
+/// Remove an attribute from the container
+pub struct UnsetAttributeModification<T: AttributeValue> {
+    handle: Handle,
+    attribute: &'static Attribute<T>,
+}
+
+impl<T: AttributeValue> UnsetAttributeModification<T> {
+    #[inline]
+    pub fn new(handle: Handle, attribute: &'static Attribute<T>) -> UnsetAttributeModification<T> {
+        UnsetAttributeModification {
+            handle,
+            attribute,
+        }
+    }
+}
+
+impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
+    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
+        let container = pool.get_attribute_container(self.handle)?;
+        let current_value = container.get(self.attribute)?.clone();
+
+        if let Some(index) = pool.get_index_mut(self.attribute.get_name()) {
+            index.remove_container_hook(self.handle, &current_value)?;
+        }
+
+        let container = pool.get_attribute_container_mut(self.handle)?;
+        container.remove(self.attribute);
         Ok(())
     }
 }
@@ -71,6 +102,33 @@ impl CreateContainerModification {
 impl Modification for CreateContainerModification {
     fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
         pool.add_attribute_container_with_handle(self.handle)?;
+        Ok(())
+    }
+}
+
+pub struct RemoveContainerModification {
+    handle: Handle,
+}
+
+impl RemoveContainerModification {
+    #[inline]
+    pub fn new(handle: Handle) -> RemoveContainerModification {
+        RemoveContainerModification {
+            handle,
+        }
+    }
+}
+
+impl Modification for RemoveContainerModification {
+    fn apply(&self, pool: &mut Pool) -> Result<(), Box<dyn Error>> {
+        let container = pool.remove_container(self.handle)?;
+
+        for (attribute_name, attribute_value) in container.iter() {
+            if let Some(index) = pool.get_index_mut(attribute_name) {
+                index.remove_container_hook(self.handle, attribute_value)?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -119,7 +177,7 @@ impl Transaction {
 /// ```
 #[macro_export]
 macro_rules! create_container {
-    ($transaction:expr, { $($attribute:ident = $value:expr),+ }) => {
+    ($transaction:expr, { $($($token:tt)*),+ }) => {
         {
             use $crate::modify_container;
 
@@ -130,7 +188,7 @@ macro_rules! create_container {
 
             modify_container!(transaction, handle, {
                 $(
-                    $attribute = $value
+                    $($token)*
                 ),+
             });
 
@@ -152,15 +210,108 @@ macro_rules! create_container {
 ///     dummy_attribute = 2
 /// });
 /// ```
+/// 
+/// You can also remove an attribute from a container with unset
+/// ```
+/// # use tank_game::rules::infrastructure::ecs::{Transaction, Attribute};
+/// # use tank_game::{create_container,modify_container};
+/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// #
+/// let mut transaction = Transaction::new();
+/// # let dummy_handle = create_container!(&mut transaction, { dummy_attribute = 3 });
+/// modify_container!(&mut transaction, dummy_handle, {
+///     unset dummy_attribute
+/// });
+/// ```
 #[macro_export]
 macro_rules! modify_container {
-    ($transaction:expr, $handle:expr, { $($attribute:ident = $value:expr),+ }) => {
+    ($transaction:expr, $handle:expr, { $($($token:tt)*),+ }) => {
         {
+            use $crate::modify_attribute;
+
             let transaction: &mut $crate::rules::infrastructure::ecs::Transaction = $transaction;
 
             $(
-                transaction.add($crate::rules::infrastructure::ecs::AttributeModification::new($handle, &$attribute, $value));
+                modify_attribute!(transaction, $handle, $($token)*);
             )+
+        }
+    };
+}
+
+/// A helper that creates modifications for a single attribute.  Most users should use modify_container! or create_container! instead.
+#[macro_export]
+macro_rules! modify_attribute {
+    ($transaction:expr, $handle:expr, $attribute:ident = $value:expr) => {
+        $transaction.add($crate::rules::infrastructure::ecs::AttributeModification::new($handle, &$attribute, $value));
+    };
+
+    ($transaction:expr, $handle:expr, unset $attribute:ident) => {
+        $transaction.add($crate::rules::infrastructure::ecs::UnsetAttributeModification::new($handle, &$attribute));
+    };
+}
+
+/// Like create_container! but it creates a transaction and applies it immidately
+/// 
+/// ```
+/// # use std::error::Error;
+/// # use tank_game::rules::infrastructure::ecs::{Attribute, Pool};
+/// # use tank_game::create_container_immidate;
+/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// #
+/// let mut pool = Pool::new();
+/// let new_handle = create_container_immidate!(&mut pool, {
+///     dummy_attribute = 3
+/// })?;
+/// # Ok::<(), Box<dyn Error>>(())
+/// ```
+#[macro_export]
+macro_rules! create_container_immidate {
+    ($pool:expr, $($token:tt)*) => {
+        {
+            use $crate::create_container;
+            use $crate::rules::infrastructure::ecs::Transaction;
+
+            let pool: &mut Pool = $pool;
+            let mut transaction = Transaction::new();
+
+            let handle = create_container!(&mut transaction, $($token)*);
+
+            match transaction.apply(pool) {
+                Ok(()) => Ok(handle),
+                Err(err) => Err(err),
+            }
+        }
+    };
+}
+
+/// Like modify_container! but it creates a transaction and applies it immidately
+/// 
+/// ```
+/// # use std::error::Error;
+/// # use tank_game::rules::infrastructure::ecs::{Attribute, Pool};
+/// # use tank_game::{create_container_immidate, modify_container_immidate};
+/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// #
+/// let mut pool = Pool::new();
+/// # let dummy_handle = create_container_immidate!(&mut pool, { dummy_attribute = 3 })?;
+/// modify_container_immidate!(&mut pool, dummy_handle, {
+///     dummy_attribute = 3
+/// })?;
+/// # Ok::<(), Box<dyn Error>>(())
+/// ```
+#[macro_export]
+macro_rules! modify_container_immidate {
+    ($pool:expr, $($token:tt)*) => {
+        {
+            use $crate::modify_container;
+            use $crate::rules::infrastructure::ecs::Transaction;
+
+            let pool: &mut Pool = $pool;
+            let mut transaction = Transaction::new();
+
+            modify_container!(&mut transaction, $($token)*);
+
+            transaction.apply(pool)
         }
     };
 }
@@ -175,6 +326,17 @@ mod test {
     };
 
     use super::*;
+
+    #[test]
+    fn transaction_test() {
+        let mut pool = Pool::new();
+
+        let handle = create_container_immidate!(&mut pool, { DUMMY_ATTRIBUTE = 2 }).unwrap();
+        assert_eq!(*pool.get_attribute_container(handle).unwrap().get(&DUMMY_ATTRIBUTE).unwrap(), 2);
+
+        modify_container_immidate!(&mut pool, handle, { unset DUMMY_ATTRIBUTE }).unwrap();
+        assert!(pool.get_attribute_container(handle).unwrap().get(&DUMMY_ATTRIBUTE).is_err());
+    }
 
     struct TestIndex {
         handle: Option<Handle>,
@@ -225,15 +387,80 @@ mod test {
         pool.add_index(&DUMMY_ATTRIBUTE, TestIndex::new());
 
         let handle = pool.add_attribute_container();
+        modify_container_immidate!(&mut pool, handle, { DUMMY_ATTRIBUTE = 2 }).unwrap();
+
+        pool.add_attribute_container();
+
+        let result = TestIndex::get(&pool).unwrap();
+        assert_eq!(result, handle);
+
+        let mut transaction = Transaction::new();
+        transaction.add(RemoveContainerModification::new(handle));
+        transaction.apply(&mut pool).unwrap();
+
+        let result = TestIndex::get(&pool);
+        assert!(result.is_err());
+    }
+
+    struct FailingIndex {}
+
+    static mut FAILING_INDEX_FAILS: bool = false;
+
+    impl FailingIndex {
+        fn return_result(&self) -> Result<(), Box<dyn Error>> {
+            if unsafe { FAILING_INDEX_FAILS } {
+                Err(Box::new(RuleError::Generic(String::from("Tripped error"))))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    impl Index for FailingIndex {
+        type AttributeValueType = u32;
+
+        fn add_container(
+                &mut self,
+                _handle: Handle,
+                _new_value: &Self::AttributeValueType,
+            ) -> Result<(), Box<dyn Error>> {
+            self.return_result()
+        }
+
+        fn remove_container(
+                &mut self,
+                _handle: Handle,
+                _old_value: &Self::AttributeValueType,
+            ) -> Result<(), Box<dyn Error>> {
+                self.return_result()
+        }
+
+        fn update_container(
+                &mut self,
+                _handle: Handle,
+                _old_value: &Self::AttributeValueType,
+                _new_value: &Self::AttributeValueType,
+            ) -> Result<(), Box<dyn Error>> {
+                self.return_result()
+        }
+    }
+
+    #[test]
+    fn failing_index() {
+        let mut pool = Pool::new();
+        pool.add_index(&DUMMY_ATTRIBUTE, FailingIndex {});
+
+        let handle = pool.add_attribute_container();
 
         let mut transaction = Transaction::new();
         modify_container!(&mut transaction, handle, { DUMMY_ATTRIBUTE = 2 });
 
         transaction.apply(&mut pool).unwrap();
 
-        pool.add_attribute_container();
+        unsafe { FAILING_INDEX_FAILS = true; }
 
-        let result = TestIndex::get(&pool).unwrap();
-        assert_eq!(result, handle);
+        let mut transaction = Transaction::new();
+        transaction.add(RemoveContainerModification::new(handle));
+        assert!(transaction.apply(&mut pool).is_err());
     }
 }

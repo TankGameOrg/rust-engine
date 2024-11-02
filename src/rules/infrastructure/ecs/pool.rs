@@ -60,7 +60,7 @@ pub trait Index: AsAny {
 
     /// Start tracking a container after the attribute this index tracks has been added to it
     ///
-    /// If an error is returned, the transaction that triggered the container update will not be applied
+    /// If an error is returned, the transaction that triggered the container add will not be applied
     fn add_container(
         &mut self,
         handle: Handle,
@@ -82,7 +82,7 @@ pub trait Index: AsAny {
 
     /// Stop tracking a container after the attribute this index tracks was removed
     ///
-    /// If an error is returned, the transaction that triggered the container update will not be applied
+    /// If an error is returned, the transaction that triggered the container remove will not still be applied
     fn remove_container(
         &mut self,
         handle: Handle,
@@ -231,6 +231,18 @@ impl Pool {
             ))))
     }
 
+    /// Remove a container from a pool
+    /// 
+    /// If the handle does not exist return an error
+    pub(super) fn remove_container(&mut self, handle: Handle) -> Result<AttributeContainer, Box<dyn Error>> {
+        let optional_container = self.containers.remove(&handle);
+
+        match optional_container {
+            None => Err(Box::new(RuleError::Generic(format!("The handle {:?} does not reference a valid container", handle)))),
+            Some(container) => Ok(container),
+        }
+    }
+
     /// Filter all of the containers in the pool and return an iterator to the ones that match
     pub fn gather<'iter>(
         &'iter self,
@@ -291,9 +303,9 @@ impl Pool {
     #[inline]
     pub(super) fn get_index_mut(
         &mut self,
-        attribute: &Attribute<impl AttributeValue>,
+        attribute_name: &'static str,
     ) -> Option<&mut Box<dyn GenericIndex>> {
-        self.indexes.get_mut(attribute.get_name())
+        self.indexes.get_mut(attribute_name)
     }
 
     /// Add an index to optimize queries for containers with a specific attribute

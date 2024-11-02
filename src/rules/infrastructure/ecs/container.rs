@@ -76,8 +76,9 @@ impl AttributeContainer {
     /// Iterate the attributes stored in the container
     // TODO: Proper IntoIter
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (&&'static str, &Box<dyn AttributeValue>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&'static str, &dyn AttributeValue)> {
         self.attributes.iter()
+            .map(|(attribute_name, attribute_value)| (*attribute_name, attribute_value.as_ref()))
     }
 }
 
