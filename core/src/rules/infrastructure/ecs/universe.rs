@@ -30,7 +30,7 @@ impl AttributeValue for Handle {}
 
 /// GenericIndex is the internal, boxable, representation of an index
 ///
-/// It allows us to store Indexes with multiple AttributeValue types in the same HashMap
+/// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
 pub(super) trait AnyIndex: AsAny {
     fn add_attribute_hook(
         &mut self,
@@ -60,6 +60,9 @@ pub trait Index: AsAny {
 
     /// Start tracking a entity after the attribute this index tracks has been added to it
     ///
+    /// `add_attribute` can only be called with handles that are not currently store by this index.
+    /// so add_attribute add_attribute is invalid but add_attribute remove_attribute add_attribute is valid.
+    /// 
     /// If an error is returned, the transaction that triggered the entity add will not be applied
     fn add_attribute(
         &mut self,
@@ -68,6 +71,10 @@ pub trait Index: AsAny {
     ) -> Result<(), Box<dyn Error>>;
 
     /// The value of the attribute that this index tracks has been updated
+    /// 
+    /// `update_attribute` can only be called with handles that are tracked by the Index (i.e. `add_attirbute`
+    /// has already been called).  Additionally `old_value` must match the `new_value` given to the most recent
+    /// `add_attribute` or `update_attribute` call.
     ///
     /// If an error is returned, the transaction that triggered the entity update will not be applied
     fn update_attribute(
@@ -81,6 +88,11 @@ pub trait Index: AsAny {
     }
 
     /// Stop tracking a entity after the attribute this index tracks was removed
+    /// 
+    /// `remove_attribute` can only be called with handles that are tracked by the Index (i.e. `add_attirbute`
+    /// has already been called).  Additionally `old_value` must match the `new_value` given to the most recent
+    /// `add_attribute` or `update_attribute` call.  After `remove_attribute` is called the handle is no longer
+    /// tracked by the index.
     ///
     /// If an error is returned, the transaction that triggered the entity remove will not still be applied
     fn remove_attribute(
@@ -158,7 +170,7 @@ pub struct GatheredResult<'entity> {
 /// A collection of entities that can be queried by their attributes
 pub struct Universe {
     entities: HashMap<Handle, Entity>,
-    indexes: HashMap<&'static dyn AnyAttribute, Box<dyn AnyIndex>>,
+    indicies: HashMap<&'static dyn AnyAttribute, Box<dyn AnyIndex>>,
     is_valid: bool,
 }
 
@@ -167,7 +179,7 @@ impl Universe {
     pub fn new() -> Universe {
         Universe {
             entities: HashMap::new(),
-            indexes: HashMap::new(),
+            indicies: HashMap::new(),
             is_valid: true,
         }
     }
@@ -302,7 +314,7 @@ impl Universe {
     {
         self.assert_validity()?;
 
-        match self.indexes.get(attribute as &dyn AnyAttribute) {
+        match self.indicies.get(attribute as &dyn AnyAttribute) {
             Some(index) => match index.as_ref().downcast_ref::<IndexType>() {
                 Some(index) => Ok(index),
                 None => Err(Box::new(RuleError::Generic(format!(
@@ -326,7 +338,7 @@ impl Universe {
         attribute: &dyn AnyAttribute,
     ) -> Option<&mut Box<dyn AnyIndex>> {
         if self.is_valid {
-            self.indexes.get_mut(attribute)
+            self.indicies.get_mut(attribute)
         } else {
             None
         }
@@ -334,7 +346,7 @@ impl Universe {
 
     /// Add an index to optimize queries for entities with a specific attribute
     ///
-    /// All indexes must be added before any entities are and each attribute can only have one index
+    /// All indicies must be added before any entities are and each attribute can only have one index
     #[inline]
     pub fn add_index<T: AttributeValue>(
         &mut self,
@@ -348,11 +360,11 @@ impl Universe {
             attribute
         );
         assert!(
-            !self.indexes.contains_key(attribute as &dyn AnyAttribute),
+            !self.indicies.contains_key(attribute as &dyn AnyAttribute),
             "An index has already been registered for {:?}",
             attribute
         );
-        self.indexes.insert(attribute, Box::new(index));
+        self.indicies.insert(attribute, Box::new(index));
     }
 }
 
