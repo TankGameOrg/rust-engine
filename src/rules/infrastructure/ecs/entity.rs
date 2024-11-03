@@ -116,8 +116,6 @@ impl std::fmt::Debug for Entity {
 mod test {
     use core::panic;
 
-    use as_any::Downcast;
-
     use crate::rules::infrastructure::{ecs::attribute::DUMMY_ATTRIBUTE, RuleError};
 
     use super::Entity;
@@ -148,6 +146,9 @@ mod test {
 
     #[test]
     fn can_iterate_attributes() {
+        // as_any::Downcast overrides Error.downcast_ref in getting_a_missing_attribute_returns_error which breaks the test
+        use as_any::Downcast;
+
         let mut entity = Entity::new();
         entity.set(&DUMMY_ATTRIBUTE, 4);
 
