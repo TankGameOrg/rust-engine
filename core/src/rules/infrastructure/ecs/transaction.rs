@@ -36,7 +36,7 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         let entity = universe.get_entity(self.handle)?;
-        let current_value = entity.get(self.attribute).ok().map(|value| value.clone());
+        let current_value = entity.get(self.attribute).ok().cloned();
 
         if let Some(index) = universe.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
@@ -130,6 +130,12 @@ impl Modification for RemoveEntityModification {
 /// A series of modifications that can be applied to a universe
 pub struct Transaction {
     modifications: Vec<Box<dyn Modification>>,
+}
+
+impl Default for Transaction {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Transaction {
@@ -333,10 +339,10 @@ mod test {
 
     impl TestIndex {
         fn new() -> TestIndex {
-            return TestIndex { handle: None };
+            TestIndex { handle: None }
         }
 
-        fn get<'iter>(universe: &'iter Universe) -> Result<Handle, Box<dyn Error>> {
+        fn get(universe: &Universe) -> Result<Handle, Box<dyn Error>> {
             let index: &TestIndex = universe.get_index(&DUMMY_ATTRIBUTE)?;
 
             match index.handle {

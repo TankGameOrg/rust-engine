@@ -1,8 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    error::Error,
-};
+use std::{any::TypeId, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
@@ -44,7 +40,7 @@ impl Entity {
                     panic!(
                         "Failed to unwrap attribute '{}' had type {:?} but expected {:?}",
                         key.get_name(),
-                        any.type_id(),
+                        any.as_ref().type_id(),
                         TypeId::of::<T>()
                     );
                 }
@@ -82,6 +78,12 @@ impl Entity {
     }
 }
 
+impl Default for Entity {
+    fn default() -> Self {
+        Entity::new()
+    }
+}
+
 /// An iterator for the attributes in an entity
 pub struct AttributeIterator<'iter> {
     iter: std::collections::hash_map::Iter<'iter, &'iter dyn AnyAttribute, Box<dyn AttributeValue>>,
@@ -91,10 +93,9 @@ impl<'iter> Iterator for AttributeIterator<'iter> {
     type Item = (&'iter dyn AnyAttribute, &'iter dyn AttributeValue);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.iter.next() {
-            Some((attribute, value)) => Some((*attribute, value.as_ref())),
-            None => None,
-        }
+        self.iter
+            .next()
+            .map(|(attribute, value)| (*attribute, value.as_ref()))
     }
 }
 

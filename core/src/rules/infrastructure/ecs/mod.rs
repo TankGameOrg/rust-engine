@@ -7,7 +7,7 @@
 //! # use tank_game_core::rules::infrastructure::ecs::*;
 //! #
 //! attribute!(HEALTH: u32);
-//! 
+//!
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
@@ -81,7 +81,7 @@
 //!     living: HashSet<Handle>, // health > 0
 //!     dead: HashSet<Handle>,   // health == 0
 //! }
-//! 
+//!
 //! impl LivingEntities {
 //!     fn new() -> LivingEntities {
 //!         LivingEntities {
@@ -89,22 +89,22 @@
 //!             dead: HashSet::new(),
 //!         }
 //!     }
-//! 
+//!
 //!     // Each index defines it's own functions for finding/gathering entities by the attribute that it tracks
 //!     fn gather_living(universe: &Universe) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
 //!         let index: &LivingEntities = universe.get_index(&HEALTH)?;
 //!         universe.gather_handles(index.living.iter())
 //!     }
-//! 
+//!
 //!     fn gather_dead(universe: &Universe) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
 //!         let index: &LivingEntities = universe.get_index(&HEALTH)?;
 //!         universe.gather_handles(index.dead.iter())
 //!     }
 //! }
-//! 
+//!
 //! impl Index for LivingEntities {
 //!     type AttributeValueType = u32;
-//! 
+//!
 //!     fn add_attribute(
 //!             &mut self,
 //!             handle: Handle,
@@ -118,10 +118,10 @@
 //!         else {
 //!             self.dead.insert(handle);
 //!         }
-//! 
+//!
 //!         Ok(())
 //!     }
-//! 
+//!
 //!     fn remove_attribute(
 //!             &mut self,
 //!             handle: Handle,
@@ -133,14 +133,14 @@
 //!         else {
 //!             self.dead.remove(&handle);
 //!         }
-//! 
+//!
 //!         Ok(())
 //!     }
 //!     
 //!     // Since we haven't defined an update_attribute function if the HEALTH attribute on an entity is modified
 //!     // the default impl will call remove_attribute then add_attribute
 //! }
-//! 
+//!
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
@@ -196,8 +196,6 @@ mod attribute;
 mod entity;
 mod transaction;
 mod universe;
-
-use std::collections::HashSet;
 
 pub use attribute::{AnyAttribute, Attribute, AttributeValue};
 pub use entity::Entity;

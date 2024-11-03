@@ -62,7 +62,7 @@ pub trait Index: AsAny {
     ///
     /// `add_attribute` can only be called with handles that are not currently store by this index.
     /// so add_attribute add_attribute is invalid but add_attribute remove_attribute add_attribute is valid.
-    /// 
+    ///
     /// If an error is returned, the transaction that triggered the entity add will not be applied
     fn add_attribute(
         &mut self,
@@ -71,7 +71,7 @@ pub trait Index: AsAny {
     ) -> Result<(), Box<dyn Error>>;
 
     /// The value of the attribute that this index tracks has been updated
-    /// 
+    ///
     /// `update_attribute` can only be called with handles that are tracked by the Index (i.e. `add_attirbute`
     /// has already been called).  Additionally `old_value` must match the `new_value` given to the most recent
     /// `add_attribute` or `update_attribute` call.
@@ -88,7 +88,7 @@ pub trait Index: AsAny {
     }
 
     /// Stop tracking a entity after the attribute this index tracks was removed
-    /// 
+    ///
     /// `remove_attribute` can only be called with handles that are tracked by the Index (i.e. `add_attirbute`
     /// has already been called).  Additionally `old_value` must match the `new_value` given to the most recent
     /// `add_attribute` or `update_attribute` call.  After `remove_attribute` is called the handle is no longer
@@ -172,6 +172,12 @@ pub struct Universe {
     entities: HashMap<Handle, Entity>,
     indicies: HashMap<&'static dyn AnyAttribute, Box<dyn AnyIndex>>,
     is_valid: bool,
+}
+
+impl Default for Universe {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Universe {
@@ -278,7 +284,7 @@ impl Universe {
         Ok(self
             .entities
             .iter()
-            .filter(|(_, entity)| predicate(*entity))
+            .filter(|(_, entity)| predicate(entity))
             .map(|(handle, entity)| GatheredResult {
                 handle: *handle,
                 entity,
@@ -355,7 +361,7 @@ impl Universe {
     ) {
         self.assert_validity().unwrap();
         assert!(
-            self.entities.len() == 0,
+            self.entities.is_empty(),
             "Index for {:?} was added after entities had been added",
             attribute
         );
@@ -469,7 +475,7 @@ mod test {
 
         // Gather two of the entities
         let matches = universe
-            .gather_handles(vec![first_handle, second_handle].iter())
+            .gather_handles([first_handle, second_handle].iter())
             .unwrap();
 
         assert_eq!(matches.len(), 2);
@@ -532,7 +538,7 @@ mod test {
         assert!(universe.get_entity_mut(handle).is_err());
         assert!(universe.remove_entity(handle).is_err());
         assert!(universe.gather(&|_c| true).is_err());
-        assert!(universe.gather_handles(vec![handle].iter()).is_err());
+        assert!(universe.gather_handles([handle].iter()).is_err());
         let result: Result<&DummyIndex, Box<dyn Error>> = universe.get_index(&DUMMY_ATTRIBUTE);
         assert!(result.is_err());
     }

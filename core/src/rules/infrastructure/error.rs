@@ -16,7 +16,7 @@ impl Display for RuleError {
                 f.write_fmt(format_args!("Could not find attribute '{}'", name))?;
             }
             Self::Generic(message) => {
-                f.write_str(&message)?;
+                f.write_str(message)?;
             }
         }
 
