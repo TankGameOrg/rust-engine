@@ -11,7 +11,7 @@ use super::attribute::{AnyAttribute, Attribute, AttributeValue};
 /// A generic container for storing keys of different types
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::{Attribute, Entity};
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Entity};
 /// # static dummy_attribute: Attribute<u32> = Attribute::new("dummy_attribute");
 /// #
 /// let mut entity = Entity::new();

@@ -2,8 +2,8 @@
 //! 
 //! ```
 //! # use std::error::Error;
-//! # use tank_game::*;
-//! # use tank_game::rules::infrastructure::ecs::*;
+//! # use tank_game_core::*;
+//! # use tank_game_core::rules::infrastructure::ecs::*;
 //! #
 //! attribute!(HEALTH: u32);
 //! attribute!(REGEN: u32);

@@ -45,12 +45,12 @@ impl Hash for dyn AnyAttribute {
 /// Each attribute has a name and value type.  For example we can
 /// create an attribute called speed that stores a u32
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::Attribute;
+/// # use tank_game_core::rules::infrastructure::ecs::Attribute;
 /// let speed = Attribute::<u32>::new("speed");
 /// ```
 /// or define an attribute that holds a struct
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::{Attribute,AttributeValue};
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute,AttributeValue};
 /// #[derive(Debug)]
 /// enum PetType {
 ///     Cat,
@@ -104,7 +104,7 @@ impl<ValueType: AttributeValue> AnyAttribute for Attribute<ValueType> {
 ///
 /// We can define a new attribute DAMAGE_PER_TRUN like so
 /// ```
-/// # use tank_game::attribute;
+/// # use tank_game_core::attribute;
 /// attribute!(DAMAGE_PER_TURN: u32);
 /// ```
 #[macro_export]

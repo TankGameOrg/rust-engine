@@ -172,8 +172,8 @@ impl Transaction {
 /// Add the modifications required to create and initialize an Entity to the given transaction
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::{Attribute, Transaction};
-/// # use tank_game::create_entity;
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Transaction};
+/// # use tank_game_core::create_entity;
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
 /// let mut transaction = Transaction::new();
@@ -206,8 +206,8 @@ macro_rules! create_entity {
 /// A helper for creating modifications to an Entity
 ///
 /// ```
-/// # use tank_game::rules::infrastructure::ecs::{Transaction, Attribute};
-/// # use tank_game::{create_entity,modify_entity};
+/// # use tank_game_core::rules::infrastructure::ecs::{Transaction, Attribute};
+/// # use tank_game_core::{create_entity,modify_entity};
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
 /// let mut transaction = Transaction::new();
@@ -233,8 +233,8 @@ macro_rules! modify_entity {
 /// 
 /// ```
 /// # use std::error::Error;
-/// # use tank_game::rules::infrastructure::ecs::{Attribute, Universe};
-/// # use tank_game::create_entity_immidate;
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
+/// # use tank_game_core::create_entity_immidate;
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
 /// let mut universe = Universe::new();
@@ -267,8 +267,8 @@ macro_rules! create_entity_immidate {
 /// 
 /// ```
 /// # use std::error::Error;
-/// # use tank_game::rules::infrastructure::ecs::{Attribute, Universe};
-/// # use tank_game::{create_entity_immidate, modify_entity_immidate};
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
+/// # use tank_game_core::{create_entity_immidate, modify_entity_immidate};
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
 /// let mut universe = Universe::new();
