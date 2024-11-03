@@ -12,6 +12,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
     - uses: actions/checkout@v4
     - name: Format code
@@ -19,10 +22,12 @@ jobs:
         cargo fmt
         # Check if cargo fmt modified any files and commit them if it did
         if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-          git commit \
-            --author="Ryan Ray (ci) <ryan3r@users.noreply.github.com>" \
-            --all \
-            --message="Run cargo fmt (CI)"
+          git \
+            -c user.name="Ryan Ray (ci)" \
+            -c user.email="ryan3r@users.noreply.github.com" \
+            commit \
+              --all \
+              --message="Run cargo fmt (CI)"
           # Pushing will not retrigger 
           git push
         fi
