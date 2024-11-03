@@ -2,8 +2,6 @@ name: Publish the updated docs
 
 on:
   push:
-    tags:
-      - v*
 
 jobs:
   build:
@@ -18,6 +16,7 @@ jobs:
         run: |
             cargo doc
             tar -cvf ${{ runner.temp }}/docs.tar -C core/target/doc/ tank_game_core
+        working-directory: core
       - name: Upload artifact
         id: upload-artifact
         uses: actions/upload-artifact@v4
