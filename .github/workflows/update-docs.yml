@@ -1,0 +1,33 @@
+name: Publish the updated docs
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write      # to deploy to Pages
+      id-token: write   # to verify the deployment originates from an appropriate source
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the docs
+        run: |
+            cargo doc
+            tar -cvf ${{ runner.temp }}/docs.tar -C core/target/doc/ tank_game_core
+      - name: Upload artifact
+        id: upload-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tank-game-docs
+          path: ${{ runner.temp }}/docs.tar
+          retention-days: 1
+          if-no-files-found: error
+      - name: Deploy to GitHub Pages
+        id: docs
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: tank-game-docs
