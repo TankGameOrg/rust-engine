@@ -1,7 +1,5 @@
 use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    error::Error,
+    any::{Any, TypeId}, collections::HashMap, error::Error
 };
 
 use as_any::Downcast;
@@ -74,11 +72,36 @@ impl Entity {
     }
 
     /// Iterate the attributes stored in the entity
-    // TODO: Proper IntoIter
     #[inline]
-    pub fn iter(&self) -> impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)> {
-        self.attributes.iter()
-            .map(|(attribute, attribute_value)| (*attribute, attribute_value.as_ref()))
+    pub fn iter(&self) -> AttributeIterator {
+        AttributeIterator {
+            iter: self.attributes.iter(),
+        }
+    }
+}
+
+/// An iterator for the attributes in an entity
+pub struct AttributeIterator<'iter> {
+    iter: std::collections::hash_map::Iter<'iter, &'iter dyn AnyAttribute, Box<dyn AttributeValue>>,
+}
+
+impl<'iter> Iterator for AttributeIterator<'iter> {
+    type Item = (&'iter dyn AnyAttribute, &'iter dyn AttributeValue);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.iter.next() {
+            Some((attribute, value)) => Some((*attribute, value.as_ref())),
+            None => None,
+        }
+    }
+}
+
+impl<'iter> IntoIterator for &'iter Entity {
+    type Item = (&'iter dyn AnyAttribute, &'iter dyn AttributeValue);
+    type IntoIter = AttributeIterator<'iter>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -92,6 +115,8 @@ impl std::fmt::Debug for Entity {
 #[cfg(test)]
 mod test {
     use core::panic;
+
+    use as_any::Downcast;
 
     use crate::rules::infrastructure::{ecs::attribute::DUMMY_ATTRIBUTE, RuleError};
 
@@ -119,6 +144,21 @@ mod test {
         assert!(entity.has(&DUMMY_ATTRIBUTE));
         entity.remove(&DUMMY_ATTRIBUTE);
         assert!(!entity.has(&DUMMY_ATTRIBUTE));
+    }
+
+    #[test]
+    fn can_iterate_attributes() {
+        let mut entity = Entity::new();
+        entity.set(&DUMMY_ATTRIBUTE, 4);
+
+        let mut found_value: u32 = 0;
+
+        for (attribute, value) in &entity {
+            assert_eq!(attribute.get_name(), "DUMMY_ATTRIBUTE");
+            found_value = *value.downcast_ref().unwrap();
+        }
+
+        assert_eq!(found_value, 4);
     }
 
     #[test]

@@ -124,7 +124,7 @@ impl Modification for RemoveEntityModification {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         let entity = universe.remove_entity(self.handle)?;
 
-        for (attribute, attribute_value) in entity.iter() {
+        for (attribute, attribute_value) in &entity {
             if let Some(index) = universe.get_index_mut(attribute) {
                 index.remove_attribute_hook(self.handle, attribute_value)?;
             }
