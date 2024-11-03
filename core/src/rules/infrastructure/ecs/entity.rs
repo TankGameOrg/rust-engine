@@ -1,5 +1,7 @@
 use std::{
-    any::{Any, TypeId}, collections::HashMap, error::Error
+    any::{Any, TypeId},
+    collections::HashMap,
+    error::Error,
 };
 
 use as_any::Downcast;

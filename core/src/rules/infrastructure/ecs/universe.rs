@@ -177,9 +177,10 @@ impl Universe {
     fn assert_validity(&self) -> Result<(), Box<dyn Error>> {
         if self.is_valid {
             Ok(())
-        }
-        else {
-            Err(Box::new(RuleError::Generic(String::from("A transaction failed to apply so this universe is no longer in a known good state"))))
+        } else {
+            Err(Box::new(RuleError::Generic(String::from(
+                "A transaction failed to apply so this universe is no longer in a known good state",
+            ))))
         }
     }
 
@@ -193,10 +194,7 @@ impl Universe {
     /// This method exists to allow the CreateEntityModification to return a handle when it's created even though the entity
     /// itself hasn't been created yet
     #[inline]
-    pub(super) fn add_entity(
-        &mut self,
-        handle: Handle,
-    ) -> Result<(), Box<dyn Error>> {
+    pub(super) fn add_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         self.assert_validity()?;
 
         if self.entities.contains_key(&handle) {
@@ -215,10 +213,7 @@ impl Universe {
     ///
     /// If the entity does not exist we return an error
     #[inline]
-    pub fn get_entity(
-        &self,
-        handle: Handle,
-    ) -> Result<&Entity, Box<dyn Error>> {
+    pub fn get_entity(&self, handle: Handle) -> Result<&Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
         self.entities
@@ -233,10 +228,7 @@ impl Universe {
     ///
     /// If the entity does not exist we return an error
     #[inline]
-    pub(super) fn get_entity_mut(
-        &mut self,
-        handle: Handle,
-    ) -> Result<&mut Entity, Box<dyn Error>> {
+    pub(super) fn get_entity_mut(&mut self, handle: Handle) -> Result<&mut Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
         self.entities
@@ -248,7 +240,7 @@ impl Universe {
     }
 
     /// Remove a entity from a universe
-    /// 
+    ///
     /// If the handle does not exist return an error
     pub(super) fn remove_entity(&mut self, handle: Handle) -> Result<Entity, Box<dyn Error>> {
         self.assert_validity()?;
@@ -256,7 +248,10 @@ impl Universe {
         let optional_entity = self.entities.remove(&handle);
 
         match optional_entity {
-            None => Err(Box::new(RuleError::Generic(format!("The handle {:?} does not reference a valid entity", handle)))),
+            None => Err(Box::new(RuleError::Generic(format!(
+                "The handle {:?} does not reference a valid entity",
+                handle
+            )))),
             Some(entity) => Ok(entity),
         }
     }
@@ -268,7 +263,8 @@ impl Universe {
     ) -> Result<impl Iterator<Item = GatheredResult<'iter>>, Box<dyn Error>> {
         self.assert_validity()?;
 
-        Ok(self.entities
+        Ok(self
+            .entities
             .iter()
             .filter(|(_, entity)| predicate(*entity))
             .map(|(handle, entity)| GatheredResult {
@@ -331,8 +327,7 @@ impl Universe {
     ) -> Option<&mut Box<dyn AnyIndex>> {
         if self.is_valid {
             self.indexes.get_mut(attribute)
-        }
-        else {
+        } else {
             None
         }
     }
@@ -450,8 +445,7 @@ mod test {
         let mut universe = Universe::new();
         let first_handle = Handle::new();
         universe.add_entity(first_handle).unwrap();
-        let first: &mut Entity =
-            universe.get_entity_mut(first_handle).unwrap();
+        let first: &mut Entity = universe.get_entity_mut(first_handle).unwrap();
         first.set(&DUMMY_ATTRIBUTE, 2);
 
         let second_handle = Handle::new();
@@ -485,27 +479,27 @@ mod test {
     impl Index for DummyIndex {
         type AttributeValueType = u32;
         fn add_attribute(
-                &mut self,
-                _handle: Handle,
-                _new_value: &Self::AttributeValueType,
-            ) -> Result<(), Box<dyn Error>> {
-                Ok(())
-            }
+            &mut self,
+            _handle: Handle,
+            _new_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
         fn remove_attribute(
-                &mut self,
-                _handle: Handle,
-                _old_value: &Self::AttributeValueType,
-            ) -> Result<(), Box<dyn Error>> {
-                Ok(())
-            }
+            &mut self,
+            _handle: Handle,
+            _old_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
         fn update_attribute(
-                &mut self,
-                _handle: Handle,
-                _old_value: &Self::AttributeValueType,
-                _new_value: &Self::AttributeValueType,
-            ) -> Result<(), Box<dyn Error>> {
-                Ok(())
-            }
+            &mut self,
+            _handle: Handle,
+            _old_value: &Self::AttributeValueType,
+            _new_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
+            Ok(())
+        }
     }
 
     #[test]
@@ -514,7 +508,10 @@ mod test {
 
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
-        universe.get_entity_mut(handle).unwrap().set(&DUMMY_ATTRIBUTE, 9);
+        universe
+            .get_entity_mut(handle)
+            .unwrap()
+            .set(&DUMMY_ATTRIBUTE, 9);
 
         universe.set_transaction_failed();
 

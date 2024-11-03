@@ -36,10 +36,7 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         let entity = universe.get_entity(self.handle)?;
-        let current_value = entity
-            .get(self.attribute)
-            .ok()
-            .map(|value| value.clone());
+        let current_value = entity.get(self.attribute).ok().map(|value| value.clone());
 
         if let Some(index) = universe.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
@@ -49,7 +46,8 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
             }
         }
 
-        universe.get_entity_mut(self.handle)?
+        universe
+            .get_entity_mut(self.handle)?
             .set(self.attribute, self.new_value.clone());
         Ok(())
     }
@@ -64,10 +62,7 @@ pub struct UnsetAttributeModification<T: AttributeValue> {
 impl<T: AttributeValue> UnsetAttributeModification<T> {
     #[inline]
     pub fn new(handle: Handle, attribute: &'static Attribute<T>) -> UnsetAttributeModification<T> {
-        UnsetAttributeModification {
-            handle,
-            attribute,
-        }
+        UnsetAttributeModification { handle, attribute }
     }
 }
 
@@ -114,9 +109,7 @@ pub struct RemoveEntityModification {
 impl RemoveEntityModification {
     #[inline]
     pub fn new(handle: Handle) -> RemoveEntityModification {
-        RemoveEntityModification {
-            handle,
-        }
+        RemoveEntityModification { handle }
     }
 }
 
@@ -230,7 +223,7 @@ macro_rules! modify_entity {
 }
 
 /// Like create_entity! but it creates a transaction and applies it immidately
-/// 
+///
 /// ```
 /// # use std::error::Error;
 /// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
@@ -264,7 +257,7 @@ macro_rules! create_entity_immidate {
 }
 
 /// Like modify_entity! but it creates a transaction and applies it immidately
-/// 
+///
 /// ```
 /// # use std::error::Error;
 /// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
@@ -315,12 +308,23 @@ mod test {
         let mut universe = Universe::new();
 
         let handle = create_entity_immidate!(&mut universe, { DUMMY_ATTRIBUTE = 2 }).unwrap();
-        assert_eq!(*universe.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).unwrap(), 2);
+        assert_eq!(
+            *universe
+                .get_entity(handle)
+                .unwrap()
+                .get(&DUMMY_ATTRIBUTE)
+                .unwrap(),
+            2
+        );
 
         let mut transaction = Transaction::new();
         transaction.add(UnsetAttributeModification::new(handle, &DUMMY_ATTRIBUTE));
         transaction.apply(&mut universe).unwrap();
-        assert!(universe.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).is_err());
+        assert!(universe
+            .get_entity(handle)
+            .unwrap()
+            .get(&DUMMY_ATTRIBUTE)
+            .is_err());
     }
 
     struct TestIndex {
@@ -376,7 +380,8 @@ mod test {
         modify_entity_immidate!(&mut universe, handle, {
             DUMMY_ATTRIBUTE = 2,
             DUMMY_ATTRIBUTE2 = 6
-        }).unwrap();
+        })
+        .unwrap();
 
         universe.add_entity(Handle::new()).unwrap();
 
@@ -409,28 +414,28 @@ mod test {
         type AttributeValueType = u32;
 
         fn add_attribute(
-                &mut self,
-                _handle: Handle,
-                _new_value: &Self::AttributeValueType,
-            ) -> Result<(), Box<dyn Error>> {
+            &mut self,
+            _handle: Handle,
+            _new_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
             self.return_result()
         }
 
         fn remove_attribute(
-                &mut self,
-                _handle: Handle,
-                _old_value: &Self::AttributeValueType,
-            ) -> Result<(), Box<dyn Error>> {
-                self.return_result()
+            &mut self,
+            _handle: Handle,
+            _old_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
+            self.return_result()
         }
 
         fn update_attribute(
-                &mut self,
-                _handle: Handle,
-                _old_value: &Self::AttributeValueType,
-                _new_value: &Self::AttributeValueType,
-            ) -> Result<(), Box<dyn Error>> {
-                self.return_result()
+            &mut self,
+            _handle: Handle,
+            _old_value: &Self::AttributeValueType,
+            _new_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
+            self.return_result()
         }
     }
 
@@ -447,7 +452,9 @@ mod test {
 
         transaction.apply(&mut universe).unwrap();
 
-        unsafe { FAILING_INDEX_FAILS = true; }
+        unsafe {
+            FAILING_INDEX_FAILS = true;
+        }
 
         let mut transaction = Transaction::new();
         transaction.add(RemoveEntityModification::new(handle));
