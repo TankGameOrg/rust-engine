@@ -1,0 +1,35 @@
+name: Build and test tank game
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Format code
+      run: |
+        cargo fmt
+        # Check if cargo fmt modified any files and commit them if it did
+        if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+          git commit \
+            --author="Ryan Ray (ci) <ryan3r@users.noreply.github.com>" \
+            --all \
+            --message="Run cargo fmt (CI)"
+          # Pushing will not retrigger 
+          git push
+        fi
+      working-directory: core
+    - name: Build
+      run: cargo build --verbose
+      working-directory: core
+    - name: Run tests
+      run: cargo test --verbose
+      working-directory: core
