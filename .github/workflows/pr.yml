@@ -37,6 +37,9 @@ jobs:
     - name: Build
       run: cargo build --verbose
       working-directory: core
-    - name: Run tests
+    - name: Test
       run: cargo test --verbose
+      working-directory: core
+    - name: Lint
+      run: cargo clippy -- -D warnings
       working-directory: core
