@@ -183,7 +183,7 @@ impl Transaction {
 /// ```
 #[macro_export]
 macro_rules! create_entity {
-    ($transaction:expr, { $($($token:tt)*),+ }) => {
+    ($transaction:expr, { $($($attribute:ident = $value:expr)*),+ }) => {
         {
             use $crate::modify_entity;
 
@@ -194,7 +194,7 @@ macro_rules! create_entity {
 
             modify_entity!(transaction, handle, {
                 $(
-                    $($token)*
+                    $($attribute = $value)*
                 ),+
             });
 
@@ -216,43 +216,16 @@ macro_rules! create_entity {
 ///     dummy_attribute = 2
 /// });
 /// ```
-/// 
-/// You can also remove an attribute from a entity with unset
-/// ```
-/// # use tank_game::rules::infrastructure::ecs::{Transaction, Attribute};
-/// # use tank_game::{create_entity,modify_entity};
-/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
-/// #
-/// let mut transaction = Transaction::new();
-/// # let dummy_handle = create_entity!(&mut transaction, { dummy_attribute = 3 });
-/// modify_entity!(&mut transaction, dummy_handle, {
-///     unset dummy_attribute
-/// });
-/// ```
 #[macro_export]
 macro_rules! modify_entity {
-    ($transaction:expr, $handle:expr, { $($($token:tt)*),+ }) => {
+    ($transaction:expr, $handle:expr, { $($attribute:ident = $value:expr),+ }) => {
         {
-            use $crate::modify_attribute;
-
             let transaction: &mut $crate::rules::infrastructure::ecs::Transaction = $transaction;
 
             $(
-                modify_attribute!(transaction, $handle, $($token)*);
+                transaction.add($crate::rules::infrastructure::ecs::AttributeModification::new($handle, &$attribute, $value));
             )+
         }
-    };
-}
-
-/// A helper that creates modifications for a single attribute.  Most users should use modify_entity! or create_entity! instead.
-#[macro_export]
-macro_rules! modify_attribute {
-    ($transaction:expr, $handle:expr, $attribute:ident = $value:expr) => {
-        $transaction.add($crate::rules::infrastructure::ecs::AttributeModification::new($handle, &$attribute, $value));
-    };
-
-    ($transaction:expr, $handle:expr, unset $attribute:ident) => {
-        $transaction.add($crate::rules::infrastructure::ecs::UnsetAttributeModification::new($handle, &$attribute));
     };
 }
 
@@ -331,7 +304,11 @@ mod test {
         RuleError,
     };
 
+    use crate::attribute;
+
     use super::*;
+
+    attribute!(DUMMY_ATTRIBUTE2: u32);
 
     #[test]
     fn transaction_test() {
@@ -340,7 +317,9 @@ mod test {
         let handle = create_entity_immidate!(&mut universe, { DUMMY_ATTRIBUTE = 2 }).unwrap();
         assert_eq!(*universe.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).unwrap(), 2);
 
-        modify_entity_immidate!(&mut universe, handle, { unset DUMMY_ATTRIBUTE }).unwrap();
+        let mut transaction = Transaction::new();
+        transaction.add(UnsetAttributeModification::new(handle, &DUMMY_ATTRIBUTE));
+        transaction.apply(&mut universe).unwrap();
         assert!(universe.get_entity(handle).unwrap().get(&DUMMY_ATTRIBUTE).is_err());
     }
 
@@ -394,7 +373,10 @@ mod test {
 
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
-        modify_entity_immidate!(&mut universe, handle, { DUMMY_ATTRIBUTE = 2 }).unwrap();
+        modify_entity_immidate!(&mut universe, handle, {
+            DUMMY_ATTRIBUTE = 2,
+            DUMMY_ATTRIBUTE2 = 6
+        }).unwrap();
 
         universe.add_entity(Handle::new()).unwrap();
 

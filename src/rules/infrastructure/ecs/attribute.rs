@@ -14,7 +14,7 @@ impl AsRef<dyn AttributeValue> for dyn AttributeValue {
 /// Allow attributes to use u32
 impl AttributeValue for u32 {}
 
-/// AnyAttribute can be used to accept Attribute<?>
+/// AnyAttribute can be used to accept attributes of any type dynamically (basically `Attribute<impl Any>`)
 pub trait AnyAttribute: AsAny + std::fmt::Debug {
     /// Get the name of this attribute
     fn get_name(&self) -> &'static str;
