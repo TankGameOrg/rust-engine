@@ -3,7 +3,7 @@ use std::{any::TypeId, hash::Hash, marker::PhantomData};
 use as_any::AsAny;
 
 /// The common ancestor for all attribute values
-pub trait AttributeValue: AsAny + std::fmt::Debug {}
+pub trait AttributeValue: AsAny + std::fmt::Debug + Send + Sync {}
 
 impl AsRef<dyn AttributeValue> for dyn AttributeValue {
     fn as_ref(&self) -> &dyn AttributeValue {
