@@ -109,7 +109,7 @@ impl<ValueType: AttributeValue> AnyAttribute for Attribute<ValueType> {
 /// ```
 #[macro_export]
 macro_rules! attribute {
-    ($name:ident: $type:ty) => {
+    ($access:vis $name:ident: $type:ty) => {
         pub static $name: $crate::rules::infrastructure::ecs::Attribute<$type> =
             $crate::rules::infrastructure::ecs::Attribute::new(stringify!($name));
     };
@@ -117,4 +117,4 @@ macro_rules! attribute {
 
 // A basic attribute for writing unit tests
 #[cfg(test)]
-attribute!(DUMMY_ATTRIBUTE: u32);
+attribute!(pub DUMMY_ATTRIBUTE: u32);
