@@ -25,8 +25,7 @@ pub trait AnyAttribute: AsAny + std::fmt::Debug {
 
 impl PartialEq for dyn AnyAttribute {
     fn eq(&self, other: &Self) -> bool {
-        self.get_name() == other.get_name() &&
-            self.get_value_type_id() == other.get_value_type_id()
+        self.get_name() == other.get_name() && self.get_value_type_id() == other.get_value_type_id()
     }
 }
 
@@ -38,7 +37,6 @@ impl Hash for dyn AnyAttribute {
         self.get_value_type_id().hash(state);
     }
 }
-
 
 /// An attribute that can be used to access/store data on an entity
 ///
