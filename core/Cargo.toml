@@ -1,5 +1,5 @@
 [package]
-name = "tank_game"
+name = "tank_game_core"
 version = "0.1.0"
 edition = "2021"
 
