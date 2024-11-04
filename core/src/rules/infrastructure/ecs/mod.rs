@@ -12,7 +12,7 @@
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
-//!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &HEALTH).unwrap_or(&0) > 0)? {
+//!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &HEALTH).unwrap_or(&0) > 0) {
 //!         modify_entity!(&mut transaction, handle, {
 //!             HEALTH = universe.get_attribute(handle, &HEALTH)? - 1
 //!         });
@@ -24,7 +24,7 @@
 //! fn remove_dead(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
-//!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &HEALTH).unwrap_or(&1) == 0)? {
+//!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &HEALTH).unwrap_or(&1) == 0) {
 //!         transaction.add(RemoveEntityModification::new(handle));
 //!     }
 //!

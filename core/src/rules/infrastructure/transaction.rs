@@ -35,16 +35,6 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-        let current_value = universe.get_attribute(self.handle, self.attribute).ok().cloned();
-
-        if let Some(index) = universe.get_index_mut(self.attribute) {
-            if let Some(current_value) = current_value {
-                index.update_attribute_hook(self.handle, &current_value, &self.new_value)?;
-            } else {
-                index.add_attribute_hook(self.handle, &self.new_value)?;
-            }
-        }
-
         universe.set_attribute(self.handle, self.attribute, self.new_value.clone())
     }
 }
@@ -64,12 +54,6 @@ impl<T: AttributeValue> UnsetAttributeModification<T> {
 
 impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-        let current_value = universe.get_attribute(self.handle, self.attribute)?.clone();
-
-        if let Some(index) = universe.get_index_mut(self.attribute) {
-            index.remove_attribute_hook(self.handle, &current_value)?;
-        }
-
         universe.remove_attribute(self.handle, self.attribute)
     }
 }
@@ -108,15 +92,7 @@ impl RemoveEntityModification {
 
 impl Modification for RemoveEntityModification {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-        let entity = universe.remove_entity(self.handle)?;
-
-        for (attribute, attribute_value) in &entity {
-            if let Some(index) = universe.get_index_mut(attribute) {
-                index.remove_attribute_hook(self.handle, attribute_value)?;
-            }
-        }
-
-        Ok(())
+        universe.remove_entity(self.handle)
     }
 }
 
@@ -152,7 +128,6 @@ impl Transaction {
             let result = modification.apply(universe);
 
             if result.is_err() {
-                universe.set_transaction_failed();
                 return result;
             }
         }
@@ -459,7 +434,5 @@ mod test {
         let mut transaction = Transaction::new();
         transaction.add(RemoveEntityModification::new(handle));
         assert!(transaction.apply(&mut universe).is_err());
-
-        assert!(universe.get_attribute(handle2, &DUMMY_ATTRIBUTE).is_err());
     }
 }

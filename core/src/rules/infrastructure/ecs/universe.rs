@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}
+    any::Any, collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}
 };
 
 use as_any::{AsAny, Downcast};
@@ -162,7 +162,6 @@ impl<F: Index> AnyIndex for F {
 pub struct Universe {
     entities: HashMap<Handle, Entity>,
     indicies: HashMap<&'static dyn AnyAttribute, Box<dyn AnyIndex>>,
-    is_valid: bool,
 }
 
 impl Default for Universe {
@@ -177,25 +176,7 @@ impl Universe {
         Universe {
             entities: HashMap::new(),
             indicies: HashMap::new(),
-            is_valid: true,
         }
-    }
-
-    /// Verify that the none of the transactions applied to the universe failed and return an error if one has
-    #[inline]
-    fn assert_validity(&self) -> Result<(), Box<dyn Error>> {
-        if self.is_valid {
-            Ok(())
-        } else {
-            Err(Box::new(RuleError::Generic(String::from(
-                "A transaction failed to apply so this universe is no longer in a known good state",
-            ))))
-        }
-    }
-
-    // Set the universe to an invalid state due to a transaction failing to apply
-    pub fn set_transaction_failed(&mut self) {
-        self.is_valid = false;
     }
 
     /// Add an Entity with an existing handle
@@ -204,8 +185,6 @@ impl Universe {
     /// itself hasn't been created yet
     #[inline]
     pub fn add_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
-        self.assert_validity()?;
-
         if self.entities.contains_key(&handle) {
             let current = self.entities.get(&handle).unwrap();
             return Err(Box::new(RuleError::Generic(format!(
@@ -230,7 +209,17 @@ impl Universe {
     /// 
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn set_attribute<T: AttributeValue>(&mut self, handle: Handle, key: &'static Attribute<T>, value: T) -> Result<(), Box<dyn Error>> {
+    pub fn set_attribute<T: AttributeValue + Clone>(&mut self, handle: Handle, key: &'static Attribute<T>, value: T) -> Result<(), Box<dyn Error>> {
+        let current_value = self.get_attribute(handle, key).ok().cloned();
+
+        if let Some(index) = self.indicies.get_mut(key as &dyn AnyAttribute) {
+            if let Some(current_value) = current_value {
+                index.update_attribute_hook(handle, &current_value, &value)?;
+            } else {
+                index.add_attribute_hook(handle, &value)?;
+            }
+        }
+
         self.get_entity_mut(handle)?.set(key, value);
         Ok(())
     }
@@ -239,7 +228,13 @@ impl Universe {
     /// 
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn remove_attribute(&mut self, handle: Handle, key: &dyn AnyAttribute) -> Result<(), Box<dyn Error>> {
+    pub fn remove_attribute<T: AttributeValue + Clone>(&mut self, handle: Handle, key: &Attribute<T>) -> Result<(), Box<dyn Error>> {
+        let current_value = self.get_attribute(handle, key)?.clone();
+
+        if let Some(index) = self.indicies.get_mut(key as &dyn AnyAttribute) {
+            index.remove_attribute_hook(handle, &current_value)?;
+        }
+
         self.get_entity_mut(handle)?.remove(key);
         Ok(())
     }
@@ -263,8 +258,6 @@ impl Universe {
     /// If the entity does not exist we return an error
     #[inline]
     fn get_entity(&self, handle: Handle) -> Result<&Entity, Box<dyn Error>> {
-        self.assert_validity()?;
-
         self.entities
             .get(&handle)
             .ok_or(Box::new(RuleError::Generic(format!(
@@ -278,8 +271,6 @@ impl Universe {
     /// If the entity does not exist we return an error
     #[inline]
     fn get_entity_mut(&mut self, handle: Handle) -> Result<&mut Entity, Box<dyn Error>> {
-        self.assert_validity()?;
-
         self.entities
             .get_mut(&handle)
             .ok_or(Box::new(RuleError::Generic(format!(
@@ -291,9 +282,7 @@ impl Universe {
     /// Remove a entity from a universe
     ///
     /// If the handle does not exist return an error
-    pub fn remove_entity(&mut self, handle: Handle) -> Result<Entity, Box<dyn Error>> {
-        self.assert_validity()?;
-
+    pub fn remove_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         let optional_entity = self.entities.remove(&handle);
 
         match optional_entity {
@@ -301,7 +290,15 @@ impl Universe {
                 "The handle {:?} does not reference a valid entity",
                 handle
             )))),
-            Some(entity) => Ok(entity),
+            Some(entity) => {
+                for (attribute, attribute_value) in &entity {
+                    if let Some(index) = self.indicies.get_mut(attribute) {
+                        index.remove_attribute_hook(handle, attribute_value)?;
+                    }
+                }
+
+                Ok(())
+            },
         }
     }
 
@@ -309,14 +306,12 @@ impl Universe {
     pub fn gather<'iter>(
         &'iter self,
         predicate: &'iter dyn Fn(Handle) -> bool,
-    ) -> Result<impl Iterator<Item = Handle> + 'iter, Box<dyn Error>> {
-        self.assert_validity()?;
-
-        Ok(self
+    ) -> impl Iterator<Item = Handle> + 'iter {
+        self
             .entities
             .keys()
             .filter(|handle| predicate(**handle))
-            .map(|handle| *handle))
+            .map(|handle| *handle)
     }
 
     /// Get an index which can be used to find one or more entities based on a specific attribute
@@ -328,8 +323,6 @@ impl Universe {
         T: AttributeValue,
         IndexType: Index<AttributeValueType = T> + 'static,
     {
-        self.assert_validity()?;
-
         match self.indicies.get(attribute as &dyn AnyAttribute) {
             Some(index) => match index.as_ref().downcast_ref::<IndexType>() {
                 Some(index) => Ok(index),
@@ -347,20 +340,6 @@ impl Universe {
         }
     }
 
-    // TODO: PRIVATE
-    /// Get a mutable refrence to an index to update it to handle a modification to a entity
-    #[inline]
-    pub fn get_index_mut(
-        &mut self,
-        attribute: &dyn AnyAttribute,
-    ) -> Option<&mut Box<dyn AnyIndex>> {
-        if self.is_valid {
-            self.indicies.get_mut(attribute)
-        } else {
-            None
-        }
-    }
-
     /// Add an index to optimize queries for entities with a specific attribute
     ///
     /// All indicies must be added before any entities are and each attribute can only have one index
@@ -370,7 +349,6 @@ impl Universe {
         attribute: &'static Attribute<T>,
         index: impl Index<AttributeValueType = T> + 'static,
     ) {
-        self.assert_validity().unwrap();
         assert!(
             self.entities.is_empty(),
             "Index for {:?} was added after entities had been added",
@@ -443,7 +421,6 @@ mod test {
         // Gather one of the entities
         let one: Vec<Handle> = universe
             .gather(&|handle| *universe.get_attribute(handle, &DUMMY_ATTRIBUTE).unwrap_or(&5) < 2)
-            .unwrap()
             .collect();
 
         assert_eq!(one.len(), 1);
@@ -452,7 +429,6 @@ mod test {
         // Gather both of the ones with attributes
         let two: Vec<Handle> = universe
             .gather(&|handle| universe.has_attribute(handle, &DUMMY_ATTRIBUTE).unwrap_or(false))
-            .unwrap()
             .collect();
 
         println!("{:?} - {:?}, {:?}", two, first_handle, second_handle);
@@ -487,27 +463,5 @@ mod test {
         ) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
-    }
-
-    #[test]
-    fn failed_transaction_invalidates_universe() {
-        let mut universe = Universe::new();
-
-        let handle = Handle::new();
-        universe.add_entity(handle).unwrap();
-        universe
-            .get_entity_mut(handle)
-            .unwrap()
-            .set(&DUMMY_ATTRIBUTE, 9);
-
-        universe.set_transaction_failed();
-
-        assert!(universe.add_entity(Handle::new()).is_err());
-        assert!(universe.get_entity(handle).is_err());
-        assert!(universe.get_entity_mut(handle).is_err());
-        assert!(universe.remove_entity(handle).is_err());
-        assert!(universe.gather(&|_c| true).is_err());
-        let result: Result<&DummyIndex, Box<dyn Error>> = universe.get_index(&DUMMY_ATTRIBUTE);
-        assert!(result.is_err());
     }
 }
