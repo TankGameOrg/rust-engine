@@ -1,17 +1,13 @@
 use std::{
-    collections::HashMap,
-    error::Error,
-    sync::atomic::{AtomicUsize, Ordering},
+    collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}
 };
 
 use as_any::{AsAny, Downcast};
 
 use crate::rules::infrastructure::error::RuleError;
 
-use super::{
-    attribute::{AnyAttribute, Attribute, AttributeValue},
-    entity::Entity,
-};
+use super::{attribute::{AnyAttribute, Attribute, AttributeValue}, entity::Entity};
+
 
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
@@ -20,8 +16,9 @@ pub struct Handle(usize);
 static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0);
 
 impl Handle {
+    // TODO: PRIVATE
     #[inline]
-    pub(super) fn new() -> Handle {
+    pub fn new() -> Handle {
         Handle(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed))
     }
 }
@@ -31,7 +28,7 @@ impl AttributeValue for Handle {}
 /// GenericIndex is the internal, boxable, representation of an index
 ///
 /// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
-pub(super) trait AnyIndex: AsAny {
+pub trait AnyIndex: AsAny {
     fn add_attribute_hook(
         &mut self,
         handle: Handle,
@@ -161,12 +158,6 @@ impl<F: Index> AnyIndex for F {
     }
 }
 
-/// The entity and handle that matched an index or gather filter
-pub struct GatheredResult<'entity> {
-    pub handle: Handle,
-    pub entity: &'entity Entity,
-}
-
 /// A collection of entities that can be queried by their attributes
 pub struct Universe {
     entities: HashMap<Handle, Entity>,
@@ -203,7 +194,7 @@ impl Universe {
     }
 
     // Set the universe to an invalid state due to a transaction failing to apply
-    pub(super) fn set_transaction_failed(&mut self) {
+    pub fn set_transaction_failed(&mut self) {
         self.is_valid = false;
     }
 
@@ -212,7 +203,7 @@ impl Universe {
     /// This method exists to allow the CreateEntityModification to return a handle when it's created even though the entity
     /// itself hasn't been created yet
     #[inline]
-    pub(super) fn add_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
+    pub fn add_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         self.assert_validity()?;
 
         if self.entities.contains_key(&handle) {
@@ -227,11 +218,51 @@ impl Universe {
         Ok(())
     }
 
+    /// Get an attribute's value from an entity
+    /// 
+    /// If the entity doesn't exist or it doesn't exist we return an error
+    #[inline]
+    pub fn get_attribute<T: AttributeValue>(&self, handle: Handle, key: &Attribute<T>) -> Result<&T, Box<dyn Error>> {
+        self.get_entity(handle)?.get(key)
+    }
+
+    /// Set an attribute's value for an entity
+    /// 
+    /// If the entity doesn't exist we return an error
+    #[inline]
+    pub fn set_attribute<T: AttributeValue>(&mut self, handle: Handle, key: &'static Attribute<T>, value: T) -> Result<(), Box<dyn Error>> {
+        self.get_entity_mut(handle)?.set(key, value);
+        Ok(())
+    }
+
+    /// Remove an attribute from an entity
+    /// 
+    /// If the entity doesn't exist we return an error
+    #[inline]
+    pub fn remove_attribute(&mut self, handle: Handle, key: &dyn AnyAttribute) -> Result<(), Box<dyn Error>> {
+        self.get_entity_mut(handle)?.remove(key);
+        Ok(())
+    }
+
+    /// Check an entity has an attribute
+    /// 
+    /// If the entity doesn't exist we return an error
+    #[inline]
+    pub fn has_attribute(&self, handle: Handle, key: &dyn AnyAttribute) -> Result<bool, Box<dyn Error>> {
+        Ok(self.get_entity(handle)?.has(key))
+    }
+
+    /// Iterate the attributes on an entity
+    #[inline]
+    pub fn iter_attributes(&self, handle: Handle) -> Result<impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)>, Box<dyn Error>> {
+        Ok(self.get_entity(handle)?.iter())
+    }
+
     /// Get the Entity pointed to by a handle
     ///
     /// If the entity does not exist we return an error
     #[inline]
-    pub fn get_entity(&self, handle: Handle) -> Result<&Entity, Box<dyn Error>> {
+    fn get_entity(&self, handle: Handle) -> Result<&Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
         self.entities
@@ -246,7 +277,7 @@ impl Universe {
     ///
     /// If the entity does not exist we return an error
     #[inline]
-    pub(super) fn get_entity_mut(&mut self, handle: Handle) -> Result<&mut Entity, Box<dyn Error>> {
+    fn get_entity_mut(&mut self, handle: Handle) -> Result<&mut Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
         self.entities
@@ -260,7 +291,7 @@ impl Universe {
     /// Remove a entity from a universe
     ///
     /// If the handle does not exist return an error
-    pub(super) fn remove_entity(&mut self, handle: Handle) -> Result<Entity, Box<dyn Error>> {
+    pub fn remove_entity(&mut self, handle: Handle) -> Result<Entity, Box<dyn Error>> {
         self.assert_validity()?;
 
         let optional_entity = self.entities.remove(&handle);
@@ -277,36 +308,15 @@ impl Universe {
     /// Filter all of the entities in the universe and return an iterator to the ones that match
     pub fn gather<'iter>(
         &'iter self,
-        predicate: &'iter dyn Fn(&Entity) -> bool,
-    ) -> Result<impl Iterator<Item = GatheredResult<'iter>>, Box<dyn Error>> {
+        predicate: &'iter dyn Fn(Handle) -> bool,
+    ) -> Result<impl Iterator<Item = Handle> + 'iter, Box<dyn Error>> {
         self.assert_validity()?;
 
         Ok(self
             .entities
-            .iter()
-            .filter(|(_, entity)| predicate(entity))
-            .map(|(handle, entity)| GatheredResult {
-                handle: *handle,
-                entity,
-            }))
-    }
-
-    /// Gather the entities assosiated with an iterable of handles
-    ///
-    /// Return an error if any of the entities doesn't exist
-    pub fn gather_handles<'iter>(
-        &self,
-        iter: impl Iterator<Item = &'iter Handle>,
-    ) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
-        self.assert_validity()?;
-
-        iter.map(|handle| {
-            Ok(GatheredResult {
-                handle: *handle,
-                entity: self.get_entity(*handle)?,
-            })
-        })
-        .collect()
+            .keys()
+            .filter(|handle| predicate(**handle))
+            .map(|handle| *handle))
     }
 
     /// Get an index which can be used to find one or more entities based on a specific attribute
@@ -337,9 +347,10 @@ impl Universe {
         }
     }
 
+    // TODO: PRIVATE
     /// Get a mutable refrence to an index to update it to handle a modification to a entity
     #[inline]
-    pub(super) fn get_index_mut(
+    pub fn get_index_mut(
         &mut self,
         attribute: &dyn AnyAttribute,
     ) -> Option<&mut Box<dyn AnyIndex>> {
@@ -430,66 +441,24 @@ mod test {
         universe.add_entity(Handle::new()).unwrap();
 
         // Gather one of the entities
-        let one: Vec<GatheredResult> = universe
-            .gather(&|entity| {
-                *entity
-                    .get(&DUMMY_ATTRIBUTE)
-                    .or_else(|_| -> Result<&u32, Box<dyn Error>> { Ok(&5) })
-                    .unwrap()
-                    < 2
-            })
+        let one: Vec<Handle> = universe
+            .gather(&|handle| *universe.get_attribute(handle, &DUMMY_ATTRIBUTE).unwrap_or(&5) < 2)
             .unwrap()
             .collect();
 
         assert_eq!(one.len(), 1);
-        assert_eq!(one[0].handle, second_handle);
-        assert_eq!(*one[0].entity.get(&DUMMY_ATTRIBUTE).unwrap(), 1);
+        assert_eq!(one[0], second_handle);
 
         // Gather both of the ones with attributes
         let two: Vec<Handle> = universe
-            .gather(&|entity| entity.has(&DUMMY_ATTRIBUTE))
+            .gather(&|handle| universe.has_attribute(handle, &DUMMY_ATTRIBUTE).unwrap_or(false))
             .unwrap()
-            .map(|result| result.handle)
             .collect();
 
         println!("{:?} - {:?}, {:?}", two, first_handle, second_handle);
         assert_eq!(two.len(), 2);
         assert!(two.contains(&first_handle));
         assert!(two.contains(&second_handle));
-    }
-
-    #[test]
-    fn can_gather_entities_from_handles() {
-        let mut universe = Universe::new();
-        let first_handle = Handle::new();
-        universe.add_entity(first_handle).unwrap();
-        let first: &mut Entity = universe.get_entity_mut(first_handle).unwrap();
-        first.set(&DUMMY_ATTRIBUTE, 2);
-
-        let second_handle = Handle::new();
-        universe.add_entity(second_handle).unwrap();
-        let second = universe.get_entity_mut(second_handle).unwrap();
-        second.set(&DUMMY_ATTRIBUTE, 1);
-
-        universe.add_entity(Handle::new()).unwrap();
-
-        // Gather two of the entities
-        let matches = universe
-            .gather_handles([first_handle, second_handle].iter())
-            .unwrap();
-
-        assert_eq!(matches.len(), 2);
-
-        let handles: Vec<Handle> = matches.iter().map(|result| result.handle).collect();
-        assert!(handles.contains(&first_handle));
-        assert!(handles.contains(&second_handle));
-
-        let attributes: Vec<u32> = matches
-            .iter()
-            .map(|result| *result.entity.get(&DUMMY_ATTRIBUTE).unwrap())
-            .collect();
-        assert!(attributes.contains(&1));
-        assert!(attributes.contains(&2));
     }
 
     struct DummyIndex;
@@ -538,7 +507,6 @@ mod test {
         assert!(universe.get_entity_mut(handle).is_err());
         assert!(universe.remove_entity(handle).is_err());
         assert!(universe.gather(&|_c| true).is_err());
-        assert!(universe.gather_handles([handle].iter()).is_err());
         let result: Result<&DummyIndex, Box<dyn Error>> = universe.get_index(&DUMMY_ATTRIBUTE);
         assert!(result.is_err());
     }

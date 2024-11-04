@@ -1,8 +1,8 @@
 use std::error::Error;
 
-use super::{
-    attribute::{Attribute, AttributeValue},
-    universe::{Handle, Universe},
+use super::ecs::{
+    Attribute, AttributeValue,
+    Handle, Universe,
 };
 
 /// A modification to an attribute or entity
@@ -35,8 +35,7 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
 
 impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-        let entity = universe.get_entity(self.handle)?;
-        let current_value = entity.get(self.attribute).ok().cloned();
+        let current_value = universe.get_attribute(self.handle, self.attribute).ok().cloned();
 
         if let Some(index) = universe.get_index_mut(self.attribute) {
             if let Some(current_value) = current_value {
@@ -46,10 +45,7 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
             }
         }
 
-        universe
-            .get_entity_mut(self.handle)?
-            .set(self.attribute, self.new_value.clone());
-        Ok(())
+        universe.set_attribute(self.handle, self.attribute, self.new_value.clone())
     }
 }
 
@@ -68,16 +64,13 @@ impl<T: AttributeValue> UnsetAttributeModification<T> {
 
 impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-        let entity = universe.get_entity(self.handle)?;
-        let current_value = entity.get(self.attribute)?.clone();
+        let current_value = universe.get_attribute(self.handle, self.attribute)?.clone();
 
         if let Some(index) = universe.get_index_mut(self.attribute) {
             index.remove_attribute_hook(self.handle, &current_value)?;
         }
 
-        let entity = universe.get_entity_mut(self.handle)?;
-        entity.remove(self.attribute);
-        Ok(())
+        universe.remove_attribute(self.handle, self.attribute)
     }
 }
 
@@ -171,7 +164,8 @@ impl Transaction {
 /// Add the modifications required to create and initialize an Entity to the given transaction
 ///
 /// ```
-/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Transaction};
+/// # use tank_game_core::rules::infrastructure::ecs::Attribute;
+/// # use tank_game_core::rules::infrastructure::transaction::Transaction;
 /// # use tank_game_core::create_entity;
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
@@ -186,9 +180,9 @@ macro_rules! create_entity {
         {
             use $crate::modify_entity;
 
-            let transaction: &mut $crate::rules::infrastructure::ecs::Transaction = $transaction;
+            let transaction: &mut $crate::rules::infrastructure::transaction::Transaction = $transaction;
 
-            let (handle, new_entity_modification) = $crate::rules::infrastructure::ecs::CreateEntityModification::new();
+            let (handle, new_entity_modification) = $crate::rules::infrastructure::transaction::CreateEntityModification::new();
             transaction.add(new_entity_modification);
 
             modify_entity!(transaction, handle, {
@@ -205,7 +199,8 @@ macro_rules! create_entity {
 /// A helper for creating modifications to an Entity
 ///
 /// ```
-/// # use tank_game_core::rules::infrastructure::ecs::{Transaction, Attribute};
+/// # use tank_game_core::rules::infrastructure::ecs::Attribute;
+/// # use tank_game_core::rules::infrastructure::transaction::Transaction;
 /// # use tank_game_core::{create_entity,modify_entity};
 /// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
 /// #
@@ -219,10 +214,10 @@ macro_rules! create_entity {
 macro_rules! modify_entity {
     ($transaction:expr, $handle:expr, { $($attribute:ident = $value:expr),+ }) => {
         {
-            let transaction: &mut $crate::rules::infrastructure::ecs::Transaction = $transaction;
+            let transaction: &mut $crate::rules::infrastructure::transaction::Transaction = $transaction;
 
             $(
-                transaction.add($crate::rules::infrastructure::ecs::AttributeModification::new($handle, &$attribute, $value));
+                transaction.add($crate::rules::infrastructure::transaction::AttributeModification::new($handle, &$attribute, $value));
             )+
         }
     };
@@ -247,7 +242,7 @@ macro_rules! create_entity_immidate {
     ($universe:expr, $($token:tt)*) => {
         {
             use $crate::create_entity;
-            use $crate::rules::infrastructure::ecs::Transaction;
+            use $crate::rules::infrastructure::transaction::Transaction;
 
             let universe: &mut Universe = $universe;
             let mut transaction = Transaction::new();
@@ -282,7 +277,7 @@ macro_rules! modify_entity_immidate {
     ($universe:expr, $($token:tt)*) => {
         {
             use $crate::modify_entity;
-            use $crate::rules::infrastructure::ecs::Transaction;
+            use $crate::rules::infrastructure::transaction::Transaction;
 
             let universe: &mut Universe = $universe;
             let mut transaction = Transaction::new();
@@ -299,7 +294,7 @@ mod test {
     use std::error::Error;
 
     use crate::rules::infrastructure::{
-        ecs::{attribute::DUMMY_ATTRIBUTE, universe::Index},
+        ecs::Index,
         RuleError,
     };
 
@@ -307,6 +302,7 @@ mod test {
 
     use super::*;
 
+    attribute!(DUMMY_ATTRIBUTE: u32);
     attribute!(DUMMY_ATTRIBUTE2: u32);
 
     #[test]
@@ -315,10 +311,7 @@ mod test {
 
         let handle = create_entity_immidate!(&mut universe, { DUMMY_ATTRIBUTE = 2 }).unwrap();
         assert_eq!(
-            *universe
-                .get_entity(handle)
-                .unwrap()
-                .get(&DUMMY_ATTRIBUTE)
+            *universe.get_attribute(handle, &DUMMY_ATTRIBUTE)
                 .unwrap(),
             2
         );
@@ -326,10 +319,7 @@ mod test {
         let mut transaction = Transaction::new();
         transaction.add(UnsetAttributeModification::new(handle, &DUMMY_ATTRIBUTE));
         transaction.apply(&mut universe).unwrap();
-        assert!(universe
-            .get_entity(handle)
-            .unwrap()
-            .get(&DUMMY_ATTRIBUTE)
+        assert!(universe.get_attribute(handle, &DUMMY_ATTRIBUTE)
             .is_err());
     }
 
@@ -453,6 +443,10 @@ mod test {
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
 
+        let handle2 = Handle::new();
+        universe.add_entity(handle2).unwrap();
+        universe.set_attribute(handle2, &DUMMY_ATTRIBUTE, 1).unwrap();
+
         let mut transaction = Transaction::new();
         modify_entity!(&mut transaction, handle, { DUMMY_ATTRIBUTE = 2 });
 
@@ -466,6 +460,6 @@ mod test {
         transaction.add(RemoveEntityModification::new(handle));
         assert!(transaction.apply(&mut universe).is_err());
 
-        assert!(universe.get_entity(handle).is_err());
+        assert!(universe.get_attribute(handle2, &DUMMY_ATTRIBUTE).is_err());
     }
 }

@@ -5,15 +5,16 @@
 //! # use std::error::Error;
 //! # use tank_game_core::*;
 //! # use tank_game_core::rules::infrastructure::ecs::*;
+//! # use tank_game_core::rules::infrastructure::transaction::*;
 //! #
 //! attribute!(HEALTH: u32);
 //!
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
-//!     for pair in universe.gather(&|entity| *entity.get(&HEALTH).unwrap_or(&0) > 0)? {
-//!         modify_entity!(&mut transaction, pair.handle, {
-//!             HEALTH = pair.entity.get(&HEALTH)? - 1
+//!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &HEALTH).unwrap_or(&0) > 0)? {
+//!         modify_entity!(&mut transaction, handle, {
+//!             HEALTH = universe.get_attribute(handle, &HEALTH)? - 1
 //!         });
 //!     }
 //!
@@ -23,8 +24,8 @@
 //! fn remove_dead(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
-//!     for pair in universe.gather(&|entity| *entity.get(&HEALTH).unwrap_or(&1) == 0)? {
-//!         transaction.add(RemoveEntityModification::new(pair.handle));
+//!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &HEALTH).unwrap_or(&1) == 0)? {
+//!         transaction.add(RemoveEntityModification::new(handle));
 //!     }
 //!
 //!     Ok(transaction)
@@ -45,21 +46,21 @@
 //!
 //! let damage1_transaction = damage_living(&universe)?;
 //!
-//! let tank1_health = *universe.get_entity(tank1_handle)?.get(&HEALTH)?;
+//! let tank1_health = *universe.get_attribute(tank1_handle, &HEALTH)?;
 //! // Tank1 still has 2 heath because the transaction hasn't been applied
 //! assert_eq!(tank1_health, 2);
 //!
 //! damage1_transaction.apply(&mut universe)?;
 //!
-//! let tank1_health = *universe.get_entity(tank1_handle)?.get(&HEALTH)?;
-//! let tank2_health = *universe.get_entity(tank2_handle)?.get(&HEALTH)?;
+//! let tank1_health = *universe.get_attribute(tank1_handle, &HEALTH)?;
+//! let tank2_health = *universe.get_attribute(tank2_handle, &HEALTH)?;
 //! // Now that the transaction has been applied both tanks lose 1 heath
 //! assert_eq!(tank1_health, 1);
 //! assert_eq!(tank2_health, 0);
 //!
 //! remove_dead(&universe)?.apply(&mut universe)?;
 //!
-//! assert!(universe.get_entity(tank2_handle).is_err());
+//! assert!(universe.get_attribute(tank2_handle, &HEALTH).is_err());
 //! #
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
@@ -72,6 +73,7 @@
 //! # use std::error::Error;
 //! # use tank_game_core::*;
 //! # use tank_game_core::rules::infrastructure::ecs::*;
+//! # use tank_game_core::rules::infrastructure::transaction::*;
 //! # use std::collections::HashSet;
 //! #
 //! attribute!(HEALTH: u32);
@@ -91,14 +93,14 @@
 //!     }
 //!
 //!     // Each index defines it's own functions for finding/gathering entities by the attribute that it tracks
-//!     fn gather_living(universe: &Universe) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
+//!     fn gather_living(universe: &Universe) -> Result<Vec<Handle>, Box<dyn Error>> {
 //!         let index: &LivingEntities = universe.get_index(&HEALTH)?;
-//!         universe.gather_handles(index.living.iter())
+//!         Ok(index.living.iter().cloned().collect())
 //!     }
 //!
-//!     fn gather_dead(universe: &Universe) -> Result<Vec<GatheredResult>, Box<dyn Error>> {
+//!     fn gather_dead(universe: &Universe) -> Result<Vec<Handle>, Box<dyn Error>> {
 //!         let index: &LivingEntities = universe.get_index(&HEALTH)?;
-//!         universe.gather_handles(index.dead.iter())
+//!         Ok(index.dead.iter().cloned().collect())
 //!     }
 //! }
 //!
@@ -144,9 +146,9 @@
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
-//!     for pair in LivingEntities::gather_living(&universe)? {
-//!         modify_entity!(&mut transaction, pair.handle, {
-//!             HEALTH = pair.entity.get(&HEALTH)? - 1
+//!     for handle in LivingEntities::gather_living(&universe)? {
+//!         modify_entity!(&mut transaction, handle, {
+//!             HEALTH = universe.get_attribute(handle, &HEALTH)? - 1
 //!         });
 //!     }
 //!
@@ -156,8 +158,8 @@
 //! fn remove_dead(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
 //!
-//!     for pair in LivingEntities::gather_dead(&universe)? {
-//!         transaction.add(RemoveEntityModification::new(pair.handle));
+//!     for handle in LivingEntities::gather_dead(&universe)? {
+//!         transaction.add(RemoveEntityModification::new(handle));
 //!     }
 //!
 //!     Ok(transaction)
@@ -180,24 +182,21 @@
 //!
 //! damage_living(&universe)?.apply(&mut universe)?;
 //!
-//! let tank1_health = *universe.get_entity(tank1_handle)?.get(&HEALTH)?;
-//! let tank2_health = *universe.get_entity(tank2_handle)?.get(&HEALTH)?;
+//! let tank1_health = *universe.get_attribute(tank1_handle, &HEALTH)?;
+//! let tank2_health = *universe.get_attribute(tank2_handle, &HEALTH)?;
 //! assert_eq!(tank1_health, 1);
 //! assert_eq!(tank2_health, 0);
 //!
 //! remove_dead(&universe)?.apply(&mut universe)?;
 //!
-//! assert!(universe.get_entity(tank2_handle).is_err());
+//! assert!(universe.get_attribute(tank2_handle, &HEALTH).is_err());
 //! #
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```
 
 mod attribute;
 mod entity;
-mod transaction;
 mod universe;
 
 pub use attribute::{AnyAttribute, Attribute, AttributeValue};
-pub use entity::Entity;
-pub use transaction::*;
-pub use universe::{GatheredResult, Handle, Index, Universe};
+pub use universe::{Handle, Index, Universe};
