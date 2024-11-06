@@ -52,7 +52,7 @@ impl<T: AttributeValue> UnsetAttributeModification<T> {
     }
 }
 
-impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
+impl<T: AttributeValue> Modification for UnsetAttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         universe.remove_attribute(self.handle, self.attribute)
     }
@@ -322,7 +322,7 @@ mod test {
     impl Index for TestIndex {
         type AttributeValueType = u32;
 
-        fn add_attribute(
+        fn set_attribute(
             &mut self,
             handle: Handle,
             _new_value: &u32,
@@ -333,8 +333,7 @@ mod test {
 
         fn remove_attribute(
             &mut self,
-            _handle: Handle,
-            _old_value: &u32,
+            _handle: Handle
         ) -> Result<(), Box<dyn Error>> {
             self.handle = None;
             Ok(())
@@ -384,26 +383,16 @@ mod test {
     impl Index for FailingIndex {
         type AttributeValueType = u32;
 
-        fn add_attribute(
-            &mut self,
-            _handle: Handle,
-            _new_value: &Self::AttributeValueType,
-        ) -> Result<(), Box<dyn Error>> {
-            self.return_result()
-        }
-
         fn remove_attribute(
             &mut self,
-            _handle: Handle,
-            _old_value: &Self::AttributeValueType,
+            _handle: Handle
         ) -> Result<(), Box<dyn Error>> {
             self.return_result()
         }
 
-        fn update_attribute(
+        fn set_attribute(
             &mut self,
             _handle: Handle,
-            _old_value: &Self::AttributeValueType,
             _new_value: &Self::AttributeValueType,
         ) -> Result<(), Box<dyn Error>> {
             self.return_result()

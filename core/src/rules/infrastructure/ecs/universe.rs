@@ -29,21 +29,14 @@ impl AttributeValue for Handle {}
 ///
 /// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
 pub trait AnyIndex: AsAny {
-    fn add_attribute_hook(
+    fn set_attribute_hook(
         &mut self,
         handle: Handle,
-        new_value: &dyn AttributeValue,
-    ) -> Result<(), Box<dyn Error>>;
-    fn update_attribute_hook(
-        &mut self,
-        handle: Handle,
-        old_value: &dyn AttributeValue,
         new_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
     fn remove_attribute_hook(
         &mut self,
-        handle: Handle,
-        old_value: &dyn AttributeValue,
+        handle: Handle
     ) -> Result<(), Box<dyn Error>>;
 }
 
@@ -55,18 +48,6 @@ pub trait AnyIndex: AsAny {
 pub trait Index: AsAny {
     type AttributeValueType;
 
-    /// Start tracking a entity after the attribute this index tracks has been added to it
-    ///
-    /// `add_attribute` can only be called with handles that are not currently store by this index.
-    /// so add_attribute add_attribute is invalid but add_attribute remove_attribute add_attribute is valid.
-    ///
-    /// If an error is returned, the transaction that triggered the entity add will not be applied
-    fn add_attribute(
-        &mut self,
-        handle: Handle,
-        new_value: &Self::AttributeValueType,
-    ) -> Result<(), Box<dyn Error>>;
-
     /// The value of the attribute that this index tracks has been updated
     ///
     /// `update_attribute` can only be called with handles that are tracked by the Index (i.e. `add_attirbute`
@@ -74,15 +55,11 @@ pub trait Index: AsAny {
     /// `add_attribute` or `update_attribute` call.
     ///
     /// If an error is returned, the transaction that triggered the entity update will not be applied
-    fn update_attribute(
+    fn set_attribute(
         &mut self,
         handle: Handle,
-        old_value: &Self::AttributeValueType,
         new_value: &Self::AttributeValueType,
-    ) -> Result<(), Box<dyn Error>> {
-        self.remove_attribute(handle, old_value)?;
-        self.add_attribute(handle, new_value)
-    }
+    ) -> Result<(), Box<dyn Error>>;
 
     /// Stop tracking a entity after the attribute this index tracks was removed
     ///
@@ -94,13 +71,12 @@ pub trait Index: AsAny {
     /// If an error is returned, the transaction that triggered the entity remove will not still be applied
     fn remove_attribute(
         &mut self,
-        handle: Handle,
-        old_value: &Self::AttributeValueType,
+        handle: Handle
     ) -> Result<(), Box<dyn Error>>;
 }
 
 impl<F: Index> AnyIndex for F {
-    fn add_attribute_hook(
+    fn set_attribute_hook(
         &mut self,
         handle: Handle,
         new_value: &dyn AttributeValue,
@@ -113,48 +89,14 @@ impl<F: Index> AnyIndex for F {
                 new_value.type_id()
             ))))?;
 
-        self.add_attribute(handle, new_value)
-    }
-
-    fn update_attribute_hook(
-        &mut self,
-        handle: Handle,
-        old_value: &dyn AttributeValue,
-        new_value: &dyn AttributeValue,
-    ) -> Result<(), Box<dyn Error>> {
-        let old_value = old_value
-            .downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!(
-                "Failed to cast old_value to {} from {:?}",
-                stringify!(AttributeValueType),
-                old_value.type_id()
-            ))))?;
-
-        let new_value = new_value
-            .downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!(
-                "Failed to cast new_value to {} from {:?}",
-                stringify!(AttributeValueType),
-                new_value.type_id()
-            ))))?;
-
-        self.update_attribute(handle, old_value, new_value)
+        self.set_attribute(handle, new_value)
     }
 
     fn remove_attribute_hook(
         &mut self,
-        handle: Handle,
-        old_value: &dyn AttributeValue,
+        handle: Handle
     ) -> Result<(), Box<dyn Error>> {
-        let old_value = old_value
-            .downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!(
-                "Failed to cast old_value to {} from {:?}",
-                stringify!(AttributeValueType),
-                old_value.type_id()
-            ))))?;
-
-        self.remove_attribute(handle, old_value)
+        self.remove_attribute(handle)
     }
 }
 
@@ -209,15 +151,9 @@ impl Universe {
     /// 
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn set_attribute<T: AttributeValue + Clone>(&mut self, handle: Handle, key: &'static Attribute<T>, value: T) -> Result<(), Box<dyn Error>> {
-        let current_value = self.get_attribute(handle, key).ok().cloned();
-
+    pub fn set_attribute<T: AttributeValue>(&mut self, handle: Handle, key: &'static Attribute<T>, value: T) -> Result<(), Box<dyn Error>> {
         if let Some(index) = self.indicies.get_mut(key as &dyn AnyAttribute) {
-            if let Some(current_value) = current_value {
-                index.update_attribute_hook(handle, &current_value, &value)?;
-            } else {
-                index.add_attribute_hook(handle, &value)?;
-            }
+            index.set_attribute_hook(handle, &value)?;
         }
 
         self.get_entity_mut(handle)?.set(key, value);
@@ -228,11 +164,9 @@ impl Universe {
     /// 
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn remove_attribute<T: AttributeValue + Clone>(&mut self, handle: Handle, key: &Attribute<T>) -> Result<(), Box<dyn Error>> {
-        let current_value = self.get_attribute(handle, key)?.clone();
-
+    pub fn remove_attribute<T: AttributeValue>(&mut self, handle: Handle, key: &Attribute<T>) -> Result<(), Box<dyn Error>> {
         if let Some(index) = self.indicies.get_mut(key as &dyn AnyAttribute) {
-            index.remove_attribute_hook(handle, &current_value)?;
+            index.remove_attribute_hook(handle)?;
         }
 
         self.get_entity_mut(handle)?.remove(key);
@@ -291,9 +225,9 @@ impl Universe {
                 handle
             )))),
             Some(entity) => {
-                for (attribute, attribute_value) in &entity {
+                for (attribute, _) in &entity {
                     if let Some(index) = self.indicies.get_mut(attribute) {
-                        index.remove_attribute_hook(handle, attribute_value)?;
+                        index.remove_attribute_hook(handle)?;
                     }
                 }
 
@@ -383,12 +317,9 @@ mod test {
         let mut universe = Universe::new();
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
+        universe.set_attribute(handle, &DUMMY_ATTRIBUTE, 2).unwrap();
 
-        let entity = universe.get_entity_mut(handle).unwrap();
-        entity.set(&DUMMY_ATTRIBUTE, 2);
-
-        let entity = universe.get_entity(handle).unwrap();
-        assert_eq!(*entity.get(&DUMMY_ATTRIBUTE).unwrap(), 2);
+        assert_eq!(*universe.get_attribute(handle, &DUMMY_ATTRIBUTE).unwrap(), 2);
     }
 
     #[test]
@@ -397,7 +328,6 @@ mod test {
         let handle = Handle::new();
 
         universe.add_entity(handle).unwrap();
-        universe.get_entity(handle).unwrap();
 
         let error = universe.add_entity(handle);
         assert!(error.is_err());
@@ -408,13 +338,11 @@ mod test {
         let mut universe = Universe::new();
         let first_handle = Handle::new();
         universe.add_entity(first_handle).unwrap();
-        let first = universe.get_entity_mut(first_handle).unwrap();
-        first.set(&DUMMY_ATTRIBUTE, 2);
+        universe.set_attribute(first_handle, &DUMMY_ATTRIBUTE, 2).unwrap();
 
         let second_handle = Handle::new();
         universe.add_entity(second_handle).unwrap();
-        let second = universe.get_entity_mut(second_handle).unwrap();
-        second.set(&DUMMY_ATTRIBUTE, 1);
+        universe.set_attribute(second_handle, &DUMMY_ATTRIBUTE, 1).unwrap();
 
         universe.add_entity(Handle::new()).unwrap();
 
@@ -441,24 +369,15 @@ mod test {
 
     impl Index for DummyIndex {
         type AttributeValueType = u32;
-        fn add_attribute(
-            &mut self,
-            _handle: Handle,
-            _new_value: &Self::AttributeValueType,
-        ) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
         fn remove_attribute(
             &mut self,
-            _handle: Handle,
-            _old_value: &Self::AttributeValueType,
+            _handle: Handle
         ) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
-        fn update_attribute(
+        fn set_attribute(
             &mut self,
             _handle: Handle,
-            _old_value: &Self::AttributeValueType,
             _new_value: &Self::AttributeValueType,
         ) -> Result<(), Box<dyn Error>> {
             Ok(())

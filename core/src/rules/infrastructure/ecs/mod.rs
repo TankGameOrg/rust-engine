@@ -107,7 +107,7 @@
 //! impl Index for LivingEntities {
 //!     type AttributeValueType = u32;
 //!
-//!     fn add_attribute(
+//!     fn set_attribute(
 //!             &mut self,
 //!             handle: Handle,
 //!             new_value: &Self::AttributeValueType,
@@ -126,15 +126,10 @@
 //!
 //!     fn remove_attribute(
 //!             &mut self,
-//!             handle: Handle,
-//!             old_value: &Self::AttributeValueType,
+//!             handle: Handle
 //!         ) -> Result<(), Box<dyn std::error::Error>> {
-//!         if *old_value > 0 {
-//!             self.living.remove(&handle);
-//!         }
-//!         else {
-//!             self.dead.remove(&handle);
-//!         }
+//!         self.living.remove(&handle);
+//!         self.dead.remove(&handle);
 //!
 //!         Ok(())
 //!     }
