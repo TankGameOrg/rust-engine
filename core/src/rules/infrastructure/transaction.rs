@@ -1,9 +1,6 @@
 use std::error::Error;
 
-use super::ecs::{
-    Attribute, AttributeValue,
-    Handle, Universe,
-};
+use super::ecs::{Attribute, AttributeValue, Handle, Universe};
 
 /// A modification to an attribute or entity
 pub trait Modification {
@@ -47,7 +44,10 @@ pub struct UnsetAttributeModification<T: AttributeValue> {
 
 impl<T: AttributeValue> UnsetAttributeModification<T> {
     #[inline]
-    pub fn new(handle: Handle, attribute: &'static dyn Attribute<T>) -> UnsetAttributeModification<T> {
+    pub fn new(
+        handle: Handle,
+        attribute: &'static dyn Attribute<T>,
+    ) -> UnsetAttributeModification<T> {
         UnsetAttributeModification { handle, attribute }
     }
 }
@@ -272,10 +272,7 @@ macro_rules! modify_entity_immidate {
 mod test {
     use std::error::Error;
 
-    use crate::rules::infrastructure::{
-        ecs::Index,
-        RuleError,
-    };
+    use crate::rules::infrastructure::{ecs::Index, RuleError};
 
     use crate::attribute;
 
@@ -288,17 +285,12 @@ mod test {
         let mut universe = Universe::new();
 
         let handle = create_entity_immidate!(&mut universe, { DummyAttribute = 2 }).unwrap();
-        assert_eq!(
-            *universe.get_attribute(handle, &DummyAttribute)
-                .unwrap(),
-            2
-        );
+        assert_eq!(*universe.get_attribute(handle, &DummyAttribute).unwrap(), 2);
 
         let mut transaction = Transaction::new();
         transaction.add(UnsetAttributeModification::new(handle, &DummyAttribute));
         transaction.apply(&mut universe).unwrap();
-        assert!(universe.get_attribute(handle, &DummyAttribute)
-            .is_err());
+        assert!(universe.get_attribute(handle, &DummyAttribute).is_err());
     }
 
     struct TestIndex {
@@ -332,10 +324,7 @@ mod test {
             Ok(())
         }
 
-        fn remove_attribute(
-            &mut self,
-            _handle: Handle
-        ) -> Result<(), Box<dyn Error>> {
+        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
             self.handle = None;
             Ok(())
         }
@@ -385,10 +374,7 @@ mod test {
     impl Index for FailingIndex {
         type AttributeValueType = u32;
 
-        fn remove_attribute(
-            &mut self,
-            _handle: Handle
-        ) -> Result<(), Box<dyn Error>> {
+        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
             self.return_result()
         }
 
@@ -413,7 +399,9 @@ mod test {
 
         let handle2 = Handle::new();
         universe.add_entity(handle2).unwrap();
-        universe.set_attribute(handle2, &FailingAttribute, 1).unwrap();
+        universe
+            .set_attribute(handle2, &FailingAttribute, 1)
+            .unwrap();
 
         let mut transaction = Transaction::new();
         modify_entity!(&mut transaction, handle, { FailingAttribute = 2 });

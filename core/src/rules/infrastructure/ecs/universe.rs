@@ -1,13 +1,14 @@
-use std::{
-    any::Any, collections::HashMap, error::Error
-};
+use std::{any::Any, collections::HashMap, error::Error};
 
 use as_any::{AsAny, Downcast};
 
 use crate::rules::infrastructure::error::RuleError;
 
-use super::{attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy}, entity::Entity, index::{Handle, Index}};
-
+use super::{
+    attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy},
+    entity::Entity,
+    index::{Handle, Index},
+};
 
 /// GenericIndex is the internal, boxable, representation of an index
 ///
@@ -18,12 +19,8 @@ pub trait AnyIndex: AsAny {
         handle: Handle,
         new_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
-    fn remove_attribute_hook(
-        &mut self,
-        handle: Handle
-    ) -> Result<(), Box<dyn Error>>;
+    fn remove_attribute_hook(&mut self, handle: Handle) -> Result<(), Box<dyn Error>>;
 }
-
 
 impl<F: Index> AnyIndex for F {
     fn set_attribute_hook(
@@ -42,10 +39,7 @@ impl<F: Index> AnyIndex for F {
         self.set_attribute(handle, new_value)
     }
 
-    fn remove_attribute_hook(
-        &mut self,
-        handle: Handle
-    ) -> Result<(), Box<dyn Error>> {
+    fn remove_attribute_hook(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         self.remove_attribute(handle)
     }
 }
@@ -90,18 +84,27 @@ impl Universe {
     }
 
     /// Get an attribute's value from an entity
-    /// 
+    ///
     /// If the entity doesn't exist or it doesn't exist we return an error
     #[inline]
-    pub fn get_attribute<T: AttributeValue>(&self, handle: Handle, key: &dyn Attribute<T>) -> Result<&T, Box<dyn Error>> {
+    pub fn get_attribute<T: AttributeValue>(
+        &self,
+        handle: Handle,
+        key: &dyn Attribute<T>,
+    ) -> Result<&T, Box<dyn Error>> {
         self.get_entity(handle)?.get(key)
     }
 
     /// Set an attribute's value for an entity
-    /// 
+    ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn set_attribute<T: AttributeValue>(&mut self, handle: Handle, key: &'static dyn Attribute<T>, value: T) -> Result<(), Box<dyn Error>> {
+    pub fn set_attribute<T: AttributeValue>(
+        &mut self,
+        handle: Handle,
+        key: &'static dyn Attribute<T>,
+        value: T,
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
             index.set_attribute_hook(handle, &value)?;
         }
@@ -111,10 +114,14 @@ impl Universe {
     }
 
     /// Remove an attribute from an entity
-    /// 
+    ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn remove_attribute<T: AttributeValue>(&mut self, handle: Handle, key: &dyn Attribute<T>) -> Result<(), Box<dyn Error>> {
+    pub fn remove_attribute<T: AttributeValue>(
+        &mut self,
+        handle: Handle,
+        key: &dyn Attribute<T>,
+    ) -> Result<(), Box<dyn Error>> {
         if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
             index.remove_attribute_hook(handle)?;
         }
@@ -124,16 +131,24 @@ impl Universe {
     }
 
     /// Check an entity has an attribute
-    /// 
+    ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn has_attribute(&self, handle: Handle, key: &dyn AnyAttribute) -> Result<bool, Box<dyn Error>> {
+    pub fn has_attribute(
+        &self,
+        handle: Handle,
+        key: &dyn AnyAttribute,
+    ) -> Result<bool, Box<dyn Error>> {
         Ok(self.get_entity(handle)?.has(key))
     }
 
     /// Iterate the attributes on an entity
     #[inline]
-    pub fn iter_attributes(&self, handle: Handle) -> Result<impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)>, Box<dyn Error>> {
+    pub fn iter_attributes(
+        &self,
+        handle: Handle,
+    ) -> Result<impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)>, Box<dyn Error>>
+    {
         Ok(self.get_entity(handle)?.iter())
     }
 
@@ -182,7 +197,7 @@ impl Universe {
                 }
 
                 Ok(())
-            },
+            }
         }
     }
 
@@ -191,8 +206,7 @@ impl Universe {
         &'iter self,
         predicate: &'iter dyn Fn(Handle) -> bool,
     ) -> impl Iterator<Item = Handle> + 'iter {
-        self
-            .entities
+        self.entities
             .keys()
             .filter(|handle| predicate(**handle))
             .map(|handle| *handle)
@@ -228,7 +242,10 @@ impl Universe {
     ///
     /// All indicies must be added before any entities are and each attribute can only have one index
     #[inline]
-    pub fn add_index<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>>(
+    pub fn add_index<
+        ValueType: AttributeValue,
+        IndexType: Index<AttributeValueType = ValueType>,
+    >(
         &mut self,
         attribute: &'static dyn IndexedBy<ValueType, IndexType>,
         index: IndexType,
@@ -243,7 +260,8 @@ impl Universe {
             "An index has already been registered for {:?}",
             attribute
         );
-        self.indicies.insert(attribute.as_any_attribute(), Box::new(index));
+        self.indicies
+            .insert(attribute.as_any_attribute(), Box::new(index));
     }
 }
 
@@ -288,17 +306,26 @@ mod test {
         let mut universe = Universe::new();
         let first_handle = Handle::new();
         universe.add_entity(first_handle).unwrap();
-        universe.set_attribute(first_handle, &DummyAttribute, 2).unwrap();
+        universe
+            .set_attribute(first_handle, &DummyAttribute, 2)
+            .unwrap();
 
         let second_handle = Handle::new();
         universe.add_entity(second_handle).unwrap();
-        universe.set_attribute(second_handle, &DummyAttribute, 1).unwrap();
+        universe
+            .set_attribute(second_handle, &DummyAttribute, 1)
+            .unwrap();
 
         universe.add_entity(Handle::new()).unwrap();
 
         // Gather one of the entities
         let one: Vec<Handle> = universe
-            .gather(&|handle| *universe.get_attribute(handle, &DummyAttribute).unwrap_or(&5) < 2)
+            .gather(&|handle| {
+                *universe
+                    .get_attribute(handle, &DummyAttribute)
+                    .unwrap_or(&5)
+                    < 2
+            })
             .collect();
 
         assert_eq!(one.len(), 1);
@@ -306,7 +333,11 @@ mod test {
 
         // Gather both of the ones with attributes
         let two: Vec<Handle> = universe
-            .gather(&|handle| universe.has_attribute(handle, &DummyAttribute).unwrap_or(false))
+            .gather(&|handle| {
+                universe
+                    .has_attribute(handle, &DummyAttribute)
+                    .unwrap_or(false)
+            })
             .collect();
 
         println!("{:?} - {:?}, {:?}", two, first_handle, second_handle);
@@ -319,10 +350,7 @@ mod test {
 
     impl Index for DummyIndex {
         type AttributeValueType = u32;
-        fn remove_attribute(
-            &mut self,
-            _handle: Handle
-        ) -> Result<(), Box<dyn Error>> {
+        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
         fn set_attribute(

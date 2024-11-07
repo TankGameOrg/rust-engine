@@ -1,7 +1,9 @@
-use std::{error::Error, sync::atomic::{AtomicUsize, Ordering}};
+use std::{
+    error::Error,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use as_any::AsAny;
-
 
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
@@ -46,8 +48,5 @@ pub trait Index: AsAny {
     /// tracked by the index.
     ///
     /// If an error is returned, the transaction that triggered the entity remove will not still be applied
-    fn remove_attribute(
-        &mut self,
-        handle: Handle
-    ) -> Result<(), Box<dyn Error>>;
+    fn remove_attribute(&mut self, handle: Handle) -> Result<(), Box<dyn Error>>;
 }

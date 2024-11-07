@@ -6,7 +6,6 @@ use crate::rules::infrastructure::RuleError;
 
 use super::attribute::{AnyAttribute, Attribute, AttributeValue};
 
-
 /// A generic container for storing keys of different types
 pub struct Entity {
     attributes: HashMap<&'static dyn AnyAttribute, Box<dyn AttributeValue>>,
@@ -44,7 +43,8 @@ impl Entity {
     /// Store the value of the attribute in the entity
     #[inline]
     pub fn set<T: AttributeValue>(&mut self, key: &'static dyn Attribute<T>, value: T) {
-        self.attributes.insert(key.as_any_attribute(), Box::new(value));
+        self.attributes
+            .insert(key.as_any_attribute(), Box::new(value));
     }
 
     /// Check if this entity has the specified attribute

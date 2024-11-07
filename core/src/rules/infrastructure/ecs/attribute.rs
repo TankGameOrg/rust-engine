@@ -65,9 +65,14 @@ impl<ValueType: AttributeValue> PartialEq for dyn Attribute<ValueType> {
 }
 
 /// A marker used to indicate what type indexes this attribute
-pub trait IndexedBy<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>>: Attribute<ValueType> {}
+pub trait IndexedBy<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>>:
+    Attribute<ValueType>
+{
+}
 
-impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>> std::fmt::Debug for dyn IndexedBy<ValueType, IndexType> {
+impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>> std::fmt::Debug
+    for dyn IndexedBy<ValueType, IndexType>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.as_any_attribute().fmt(f)
     }
@@ -80,7 +85,7 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 /// # use tank_game_core::attribute;
 /// attribute!(DamagePerTurn: u32);
 /// ```
-/// 
+///
 /// or define an attribute that holds a struct
 /// ```
 /// # use tank_game_core::attribute;
@@ -97,21 +102,21 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 ///     pet: PetType,
 ///     name: &'static str,
 /// }
-/// 
+///
 /// impl AttributeValue for PetValue {}
 ///
 /// attribute!(Pet: PetValue);
 /// ```
-/// 
+///
 /// And finally you can specify an index which can by used to look up the attribute by value
 /// ```
 /// # use tank_game_core::attribute;
 /// # use tank_game_core::rules::infrastructure::ecs::{Index, Handle};
 /// // Assuming you have an index type that supports your attribute
 /// struct MyIndex;
-/// 
+///
 /// impl Index for MyIndex {
-///     type AttributeValueType = u32; 
+///     type AttributeValueType = u32;
 ///     // ... impl removed for brevity ...
 /// #    fn remove_attribute(
 /// #            &mut self,
@@ -127,7 +132,7 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 /// #        Ok(())
 /// #    }
 /// }
-/// 
+///
 /// attribute!(DemoAttribute: u32, indexed by MyIndex);
 /// ```
 #[macro_export]
@@ -139,7 +144,7 @@ macro_rules! attribute {
             fn get_name(&self) -> &'static str {
                 stringify!($name)
             }
-        
+
             fn get_value_type_id(&self) -> std::any::TypeId {
                 std::any::TypeId::of::<$type>()
             }

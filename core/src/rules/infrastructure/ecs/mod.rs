@@ -135,7 +135,7 @@
 //!     // Since we haven't defined an update_attribute function if the HEALTH attribute on an entity is modified
 //!     // the default impl will call remove_attribute then add_attribute
 //! }
-//! 
+//!
 //! attribute!(HEALTH: u32, indexed by LivingEntities);
 //!
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
@@ -191,9 +191,9 @@
 
 mod attribute;
 mod entity;
-mod universe;
 mod index;
+mod universe;
 
 pub use attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy};
-pub use universe::Universe;
 pub use index::{Handle, Index};
+pub use universe::Universe;
