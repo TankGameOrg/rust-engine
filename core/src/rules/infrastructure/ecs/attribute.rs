@@ -2,6 +2,8 @@ use std::{any::TypeId, hash::Hash};
 
 use as_any::AsAny;
 
+use super::{index::Handle, Index};
+
 /// The common ancestor for all attribute values
 pub trait AttributeValue: AsAny + std::fmt::Debug + Send + Sync {}
 
@@ -11,8 +13,9 @@ impl AsRef<dyn AttributeValue> for dyn AttributeValue {
     }
 }
 
-/// Allow attributes to use u32
+// Allow attributes to use u32
 impl AttributeValue for u32 {}
+impl AttributeValue for Handle {}
 
 /// AnyAttribute can be used to accept attributes of any type dynamically (basically `Attribute<impl Any>`)
 pub trait AnyAttribute: AsAny {
@@ -61,6 +64,15 @@ impl<ValueType: AttributeValue> PartialEq for dyn Attribute<ValueType> {
     }
 }
 
+/// A marker used to indicate what type indexes this attribute
+pub trait IndexedBy<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>>: Attribute<ValueType> {}
+
+impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>> std::fmt::Debug for dyn IndexedBy<ValueType, IndexType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_any_attribute().fmt(f)
+    }
+}
+
 /// Shorthand to define a new attribute globally
 ///
 /// We can define a new attribute DamagePerTurn like so
@@ -72,7 +84,7 @@ impl<ValueType: AttributeValue> PartialEq for dyn Attribute<ValueType> {
 /// or define an attribute that holds a struct
 /// ```
 /// # use tank_game_core::attribute;
-/// # use tank_game_core::rules::infrastructure::ecs::{Attribute,AttributeValue};
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, AttributeValue};
 /// #
 /// #[derive(Debug)]
 /// enum PetType {
@@ -89,6 +101,34 @@ impl<ValueType: AttributeValue> PartialEq for dyn Attribute<ValueType> {
 /// impl AttributeValue for PetValue {}
 ///
 /// attribute!(Pet: PetValue);
+/// ```
+/// 
+/// And finally you can specify an index which can by used to look up the attribute by value
+/// ```
+/// # use tank_game_core::attribute;
+/// # use tank_game_core::rules::infrastructure::ecs::{Index, Handle};
+/// // Assuming you have an index type that supports your attribute
+/// struct MyIndex;
+/// 
+/// impl Index for MyIndex {
+///     type AttributeValueType = u32; 
+///     // ... impl removed for brevity ...
+/// #    fn remove_attribute(
+/// #            &mut self,
+/// #            _handle: Handle
+/// #        ) -> Result<(), Box<dyn std::error::Error>> {
+/// #        Ok(())
+/// #    }
+/// #    fn set_attribute(
+/// #            &mut self,
+/// #            _handle: Handle,
+/// #            _new_value: &Self::AttributeValueType,
+/// #        ) -> Result<(), Box<dyn std::error::Error>> {
+/// #        Ok(())
+/// #    }
+/// }
+/// 
+/// attribute!(DemoAttribute: u32, indexed by MyIndex);
 /// ```
 #[macro_export]
 macro_rules! attribute {
@@ -110,6 +150,12 @@ macro_rules! attribute {
                 self
             }
         }
+    };
+
+    ($access:vis $name:ident: $type:ty, indexed by $index:ty) => {
+        $crate::attribute!($access $name: $type);
+
+        impl $crate::rules::infrastructure::ecs::IndexedBy<$type, $index> for $name {}
     };
 }
 

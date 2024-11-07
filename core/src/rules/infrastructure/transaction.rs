@@ -282,7 +282,6 @@ mod test {
     use super::*;
 
     attribute!(DummyAttribute: u32);
-    attribute!(DummyAttribute2: u32);
 
     #[test]
     fn transaction_test() {
@@ -311,10 +310,8 @@ mod test {
             TestIndex { handle: None }
         }
 
-        fn get(universe: &Universe) -> Result<Handle, Box<dyn Error>> {
-            let index: &TestIndex = universe.get_index(&DummyAttribute)?;
-
-            match index.handle {
+        fn get(&self) -> Result<Handle, Box<dyn Error>> {
+            match self.handle {
                 None => Err(Box::new(RuleError::Generic(String::from(
                     "No handle stored yet",
                 )))),
@@ -344,10 +341,12 @@ mod test {
         }
     }
 
+    attribute!(DummyAttribute2: u32, indexed by TestIndex);
+
     #[test]
     fn index_test() {
         let mut universe = Universe::new();
-        universe.add_index(&DummyAttribute, TestIndex::new());
+        universe.add_index(&DummyAttribute2, TestIndex::new());
 
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
@@ -359,15 +358,14 @@ mod test {
 
         universe.add_entity(Handle::new()).unwrap();
 
-        let result = TestIndex::get(&universe).unwrap();
+        let result = universe.get_index(&DummyAttribute2).unwrap().get().unwrap();
         assert_eq!(result, handle);
 
         let mut transaction = Transaction::new();
         transaction.add(RemoveEntityModification::new(handle));
         transaction.apply(&mut universe).unwrap();
 
-        let result = TestIndex::get(&universe);
-        assert!(result.is_err());
+        assert!(universe.get_index(&FailingAttribute).is_err());
     }
 
     struct FailingIndex {}
@@ -403,20 +401,22 @@ mod test {
         }
     }
 
+    attribute!(FailingAttribute: u32, indexed by FailingIndex);
+
     #[test]
     fn failing_index() {
         let mut universe = Universe::new();
-        universe.add_index(&DummyAttribute, FailingIndex {});
+        universe.add_index(&FailingAttribute, FailingIndex {});
 
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
 
         let handle2 = Handle::new();
         universe.add_entity(handle2).unwrap();
-        universe.set_attribute(handle2, &DummyAttribute, 1).unwrap();
+        universe.set_attribute(handle2, &FailingAttribute, 1).unwrap();
 
         let mut transaction = Transaction::new();
-        modify_entity!(&mut transaction, handle, { DummyAttribute = 2 });
+        modify_entity!(&mut transaction, handle, { FailingAttribute = 2 });
 
         transaction.apply(&mut universe).unwrap();
 

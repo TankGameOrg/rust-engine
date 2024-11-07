@@ -76,8 +76,6 @@
 //! # use tank_game_core::rules::infrastructure::transaction::*;
 //! # use std::collections::HashSet;
 //! #
-//! attribute!(HEALTH: u32);
-//!
 //! // Let's start with an index that tracks all entities with health
 //! struct LivingEntities {
 //!     living: HashSet<Handle>, // health > 0
@@ -137,6 +135,8 @@
 //!     // Since we haven't defined an update_attribute function if the HEALTH attribute on an entity is modified
 //!     // the default impl will call remove_attribute then add_attribute
 //! }
+//! 
+//! attribute!(HEALTH: u32, indexed by LivingEntities);
 //!
 //! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
 //!     let mut transaction = Transaction::new();
@@ -192,6 +192,8 @@
 mod attribute;
 mod entity;
 mod universe;
+mod index;
 
-pub use attribute::{AnyAttribute, Attribute, AttributeValue};
-pub use universe::{Handle, Index, Universe};
+pub use attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy};
+pub use universe::Universe;
+pub use index::{Handle, Index};
