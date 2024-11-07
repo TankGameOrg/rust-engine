@@ -14,7 +14,7 @@ pub trait Modification {
 /// Modify an attribute on the entity referenced by the handle
 pub struct AttributeModification<T: AttributeValue> {
     handle: Handle,
-    attribute: &'static Attribute<T>,
+    attribute: &'static dyn Attribute<T>,
     new_value: T,
 }
 
@@ -22,7 +22,7 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
     #[inline]
     pub fn new(
         handle: Handle,
-        attribute: &'static Attribute<T>,
+        attribute: &'static dyn Attribute<T>,
         new_value: T,
     ) -> AttributeModification<T> {
         AttributeModification {
@@ -42,12 +42,12 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
 /// Remove an attribute from the entity
 pub struct UnsetAttributeModification<T: AttributeValue> {
     handle: Handle,
-    attribute: &'static Attribute<T>,
+    attribute: &'static dyn Attribute<T>,
 }
 
 impl<T: AttributeValue> UnsetAttributeModification<T> {
     #[inline]
-    pub fn new(handle: Handle, attribute: &'static Attribute<T>) -> UnsetAttributeModification<T> {
+    pub fn new(handle: Handle, attribute: &'static dyn Attribute<T>) -> UnsetAttributeModification<T> {
         UnsetAttributeModification { handle, attribute }
     }
 }
@@ -139,14 +139,15 @@ impl Transaction {
 /// Add the modifications required to create and initialize an Entity to the given transaction
 ///
 /// ```
+/// # use tank_game_core::attribute;
 /// # use tank_game_core::rules::infrastructure::ecs::Attribute;
 /// # use tank_game_core::rules::infrastructure::transaction::Transaction;
 /// # use tank_game_core::create_entity;
-/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// # attribute!(DummyAttribute: u32);
 /// #
 /// let mut transaction = Transaction::new();
 /// let new_handle = create_entity!(&mut transaction, {
-///     dummy_attribute = 3
+///     DummyAttribute = 3
 /// });
 /// ```
 #[macro_export]
@@ -174,15 +175,16 @@ macro_rules! create_entity {
 /// A helper for creating modifications to an Entity
 ///
 /// ```
+/// # use tank_game_core::attribute;
 /// # use tank_game_core::rules::infrastructure::ecs::Attribute;
 /// # use tank_game_core::rules::infrastructure::transaction::Transaction;
 /// # use tank_game_core::{create_entity,modify_entity};
-/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// # attribute!(DummyAttribute: u32);
 /// #
 /// let mut transaction = Transaction::new();
-/// # let dummy_handle = create_entity!(&mut transaction, { dummy_attribute = 3 });
+/// # let dummy_handle = create_entity!(&mut transaction, { DummyAttribute = 3 });
 /// modify_entity!(&mut transaction, dummy_handle, {
-///     dummy_attribute = 2
+///     DummyAttribute = 2
 /// });
 /// ```
 #[macro_export]
@@ -201,14 +203,15 @@ macro_rules! modify_entity {
 /// Like create_entity! but it creates a transaction and applies it immidately
 ///
 /// ```
+/// # use tank_game_core::attribute;
 /// # use std::error::Error;
 /// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
 /// # use tank_game_core::create_entity_immidate;
-/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// # attribute!(DummyAttribute: u32);
 /// #
 /// let mut universe = Universe::new();
 /// let new_handle = create_entity_immidate!(&mut universe, {
-///     dummy_attribute = 3
+///     DummyAttribute = 3
 /// })?;
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
@@ -235,15 +238,16 @@ macro_rules! create_entity_immidate {
 /// Like modify_entity! but it creates a transaction and applies it immidately
 ///
 /// ```
+/// # use tank_game_core::attribute;
 /// # use std::error::Error;
 /// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
 /// # use tank_game_core::{create_entity_immidate, modify_entity_immidate};
-/// # static dummy_attribute: Attribute<u32> = Attribute::<u32>::new("dummy_attribute");
+/// # attribute!(DummyAttribute: u32);
 /// #
 /// let mut universe = Universe::new();
-/// # let dummy_handle = create_entity_immidate!(&mut universe, { dummy_attribute = 3 })?;
+/// # let dummy_handle = create_entity_immidate!(&mut universe, { DummyAttribute = 3 })?;
 /// modify_entity_immidate!(&mut universe, dummy_handle, {
-///     dummy_attribute = 3
+///     DummyAttribute = 3
 /// })?;
 /// # Ok::<(), Box<dyn Error>>(())
 /// ```
@@ -277,24 +281,24 @@ mod test {
 
     use super::*;
 
-    attribute!(DUMMY_ATTRIBUTE: u32);
-    attribute!(DUMMY_ATTRIBUTE2: u32);
+    attribute!(DummyAttribute: u32);
+    attribute!(DummyAttribute2: u32);
 
     #[test]
     fn transaction_test() {
         let mut universe = Universe::new();
 
-        let handle = create_entity_immidate!(&mut universe, { DUMMY_ATTRIBUTE = 2 }).unwrap();
+        let handle = create_entity_immidate!(&mut universe, { DummyAttribute = 2 }).unwrap();
         assert_eq!(
-            *universe.get_attribute(handle, &DUMMY_ATTRIBUTE)
+            *universe.get_attribute(handle, &DummyAttribute)
                 .unwrap(),
             2
         );
 
         let mut transaction = Transaction::new();
-        transaction.add(UnsetAttributeModification::new(handle, &DUMMY_ATTRIBUTE));
+        transaction.add(UnsetAttributeModification::new(handle, &DummyAttribute));
         transaction.apply(&mut universe).unwrap();
-        assert!(universe.get_attribute(handle, &DUMMY_ATTRIBUTE)
+        assert!(universe.get_attribute(handle, &DummyAttribute)
             .is_err());
     }
 
@@ -308,7 +312,7 @@ mod test {
         }
 
         fn get(universe: &Universe) -> Result<Handle, Box<dyn Error>> {
-            let index: &TestIndex = universe.get_index(&DUMMY_ATTRIBUTE)?;
+            let index: &TestIndex = universe.get_index(&DummyAttribute)?;
 
             match index.handle {
                 None => Err(Box::new(RuleError::Generic(String::from(
@@ -343,13 +347,13 @@ mod test {
     #[test]
     fn index_test() {
         let mut universe = Universe::new();
-        universe.add_index(&DUMMY_ATTRIBUTE, TestIndex::new());
+        universe.add_index(&DummyAttribute, TestIndex::new());
 
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
         modify_entity_immidate!(&mut universe, handle, {
-            DUMMY_ATTRIBUTE = 2,
-            DUMMY_ATTRIBUTE2 = 6
+            DummyAttribute = 2,
+            DummyAttribute2 = 6
         })
         .unwrap();
 
@@ -402,17 +406,17 @@ mod test {
     #[test]
     fn failing_index() {
         let mut universe = Universe::new();
-        universe.add_index(&DUMMY_ATTRIBUTE, FailingIndex {});
+        universe.add_index(&DummyAttribute, FailingIndex {});
 
         let handle = Handle::new();
         universe.add_entity(handle).unwrap();
 
         let handle2 = Handle::new();
         universe.add_entity(handle2).unwrap();
-        universe.set_attribute(handle2, &DUMMY_ATTRIBUTE, 1).unwrap();
+        universe.set_attribute(handle2, &DummyAttribute, 1).unwrap();
 
         let mut transaction = Transaction::new();
-        modify_entity!(&mut transaction, handle, { DUMMY_ATTRIBUTE = 2 });
+        modify_entity!(&mut transaction, handle, { DummyAttribute = 2 });
 
         transaction.apply(&mut universe).unwrap();
 

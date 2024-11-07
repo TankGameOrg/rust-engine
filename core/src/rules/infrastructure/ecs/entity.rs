@@ -22,8 +22,8 @@ impl Entity {
     }
 
     /// Get the attribute value from the entity
-    pub fn get<T: AttributeValue>(&self, key: &Attribute<T>) -> Result<&T, Box<dyn Error>> {
-        match self.attributes.get(key as &dyn AnyAttribute) {
+    pub fn get<T: AttributeValue>(&self, key: &dyn Attribute<T>) -> Result<&T, Box<dyn Error>> {
+        match self.attributes.get(key.as_any_attribute()) {
             Some(any) => match any.as_ref().downcast_ref::<T>() {
                 Some(value) => Ok(value),
                 None => {
@@ -43,8 +43,8 @@ impl Entity {
 
     /// Store the value of the attribute in the entity
     #[inline]
-    pub fn set<T: AttributeValue>(&mut self, key: &'static Attribute<T>, value: T) {
-        self.attributes.insert(key, Box::new(value));
+    pub fn set<T: AttributeValue>(&mut self, key: &'static dyn Attribute<T>, value: T) {
+        self.attributes.insert(key.as_any_attribute(), Box::new(value));
     }
 
     /// Check if this entity has the specified attribute
@@ -109,32 +109,32 @@ impl std::fmt::Debug for Entity {
 mod test {
     use core::panic;
 
-    use crate::rules::infrastructure::{ecs::attribute::DUMMY_ATTRIBUTE, RuleError};
+    use crate::rules::infrastructure::{ecs::attribute::DummyAttribute, RuleError};
 
     use super::Entity;
 
     #[test]
     fn can_get_and_set_basic_attributes() {
         let mut entity = Entity::new();
-        entity.set(&DUMMY_ATTRIBUTE, 123);
-        assert_eq!(*entity.get(&DUMMY_ATTRIBUTE).unwrap(), 123);
+        entity.set(&DummyAttribute, 123);
+        assert_eq!(*entity.get(&DummyAttribute).unwrap(), 123);
     }
 
     #[test]
     fn can_check_if_an_attribute_exists() {
         let mut entity = Entity::new();
-        assert!(!entity.has(&DUMMY_ATTRIBUTE));
-        entity.set(&DUMMY_ATTRIBUTE, 5);
-        assert!(entity.has(&DUMMY_ATTRIBUTE));
+        assert!(!entity.has(&DummyAttribute));
+        entity.set(&DummyAttribute, 5);
+        assert!(entity.has(&DummyAttribute));
     }
 
     #[test]
     fn can_remove_an_attribute() {
         let mut entity = Entity::new();
-        entity.set(&DUMMY_ATTRIBUTE, 4);
-        assert!(entity.has(&DUMMY_ATTRIBUTE));
-        entity.remove(&DUMMY_ATTRIBUTE);
-        assert!(!entity.has(&DUMMY_ATTRIBUTE));
+        entity.set(&DummyAttribute, 4);
+        assert!(entity.has(&DummyAttribute));
+        entity.remove(&DummyAttribute);
+        assert!(!entity.has(&DummyAttribute));
     }
 
     #[test]
@@ -143,12 +143,12 @@ mod test {
         use as_any::Downcast;
 
         let mut entity = Entity::new();
-        entity.set(&DUMMY_ATTRIBUTE, 4);
+        entity.set(&DummyAttribute, 4);
 
         let mut found_value: u32 = 0;
 
         for (attribute, value) in &entity {
-            assert_eq!(attribute.get_name(), "DUMMY_ATTRIBUTE");
+            assert_eq!(attribute.get_name(), "DummyAttribute");
             found_value = *value.downcast_ref().unwrap();
         }
 
@@ -159,12 +159,12 @@ mod test {
     fn getting_a_missing_attribute_returns_error() {
         let entity = Entity::new();
 
-        match entity.get(&DUMMY_ATTRIBUTE) {
+        match entity.get(&DummyAttribute) {
             Ok(_) => panic!("Result can't be ok"),
             Err(err) => {
                 if let Some(RuleError::AttributeNotFound { name }) = err.downcast_ref::<RuleError>()
                 {
-                    assert_eq!(*name, "DUMMY_ATTRIBUTE");
+                    assert_eq!(*name, "DummyAttribute");
                 } else {
                     panic!("Error should be AttributeNotFound but got {:?}", err);
                 }
