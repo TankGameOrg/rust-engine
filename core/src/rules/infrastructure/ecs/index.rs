@@ -19,6 +19,12 @@ impl Handle {
     }
 }
 
+impl Default for Handle {
+    fn default() -> Self {
+        Handle::new()
+    }
+}
+
 /// A type that can optimize searches for entities with a specified attribute
 ///
 /// The Index trait provides a set of methods to update the index when an attribute changes

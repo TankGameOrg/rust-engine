@@ -125,11 +125,7 @@ impl Transaction {
     #[inline]
     pub fn apply(self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         for modification in self.modifications {
-            let result = modification.apply(universe);
-
-            if result.is_err() {
-                return result;
-            }
+            modification.apply(universe)?;
         }
 
         Ok(())

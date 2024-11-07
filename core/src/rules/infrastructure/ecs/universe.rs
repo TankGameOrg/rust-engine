@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error};
 
 use as_any::{AsAny, Downcast};
 
@@ -209,7 +209,7 @@ impl Universe {
         self.entities
             .keys()
             .filter(|handle| predicate(**handle))
-            .map(|handle| *handle)
+            .copied()
     }
 
     /// Get an index which can be used to find one or more entities based on a specific attribute
@@ -228,7 +228,7 @@ impl Universe {
                     "Expected index for {} to be {} but got type {:?}",
                     attribute.get_name(),
                     stringify!(IndexType),
-                    index.type_id()
+                    index.as_ref().type_id()
                 )))),
             },
             None => Err(Box::new(RuleError::Generic(format!(
