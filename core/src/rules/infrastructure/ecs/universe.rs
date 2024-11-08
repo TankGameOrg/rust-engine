@@ -216,25 +216,25 @@ impl Universe {
     pub fn get_index<ValueType, IndexType>(
         &self,
         attribute: &'static dyn IndexedBy<ValueType, IndexType>,
-    ) -> Result<&IndexType, Box<dyn Error>>
+    ) -> &IndexType
     where
         ValueType: AttributeValue,
         IndexType: Index<AttributeValueType = ValueType> + 'static,
     {
         match self.indicies.get(attribute.as_any_attribute()) {
             Some(index) => match index.as_ref().downcast_ref::<IndexType>() {
-                Some(index) => Ok(index),
-                None => Err(Box::new(RuleError::Generic(format!(
+                Some(index) => index,
+                None => panic!(
                     "Expected index for {} to be {} but got type {:?}",
                     attribute.get_name(),
                     stringify!(IndexType),
                     index.as_ref().type_id()
-                )))),
+                ),
             },
-            None => Err(Box::new(RuleError::Generic(format!(
+            None => panic!(
                 "Could not find an index for {}",
                 attribute.get_name()
-            )))),
+            ),
         }
     }
 
@@ -413,12 +413,10 @@ mod test {
 
         universe.add_entity(Handle::new()).unwrap();
 
-        let result = universe.get_index(&DummyAttribute2).unwrap().get().unwrap();
+        let result = universe.get_index(&DummyAttribute2).get().unwrap();
         assert_eq!(result, handle);
 
         universe.remove_entity(handle).unwrap();
-
-        assert!(universe.get_index(&FailingAttribute).is_err());
     }
 
     struct FailingIndex {}
