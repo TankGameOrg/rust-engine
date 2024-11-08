@@ -14,16 +14,16 @@ use super::{
 ///
 /// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
 pub trait AnyIndex: AsAny {
-    fn set_attribute_hook(
+    fn set_attribute_dynamic(
         &mut self,
         handle: Handle,
         new_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
-    fn remove_attribute_hook(&mut self, handle: Handle) -> Result<(), Box<dyn Error>>;
+    fn remove_attribute_dynamic(&mut self, handle: Handle) -> Result<(), Box<dyn Error>>;
 }
 
 impl<F: Index> AnyIndex for F {
-    fn set_attribute_hook(
+    fn set_attribute_dynamic(
         &mut self,
         handle: Handle,
         new_value: &dyn AttributeValue,
@@ -39,7 +39,7 @@ impl<F: Index> AnyIndex for F {
         self.set_attribute(handle, new_value)
     }
 
-    fn remove_attribute_hook(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
+    fn remove_attribute_dynamic(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         self.remove_attribute(handle)
     }
 }
@@ -106,7 +106,7 @@ impl Universe {
         value: T,
     ) -> Result<(), Box<dyn Error>> {
         if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
-            index.set_attribute_hook(handle, &value)?;
+            index.set_attribute_dynamic(handle, &value)?;
         }
 
         self.get_entity_mut(handle)?.set(key, value);
@@ -123,7 +123,7 @@ impl Universe {
         key: &dyn Attribute<T>,
     ) -> Result<(), Box<dyn Error>> {
         if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
-            index.remove_attribute_hook(handle)?;
+            index.remove_attribute_dynamic(handle)?;
         }
 
         self.get_entity_mut(handle)?.remove(key.as_any_attribute());
@@ -192,7 +192,7 @@ impl Universe {
             Some(entity) => {
                 for (attribute, _) in &entity {
                     if let Some(index) = self.indicies.get_mut(attribute) {
-                        index.remove_attribute_hook(handle)?;
+                        index.remove_attribute_dynamic(handle)?;
                     }
                 }
 
@@ -276,7 +276,7 @@ impl std::fmt::Debug for Universe {
 mod test {
     use std::error::Error;
 
-    use crate::rules::infrastructure::ecs::attribute::DummyAttribute;
+    use crate::{attribute, rules::infrastructure::ecs::attribute::DummyAttribute};
 
     use super::*;
 
@@ -360,5 +360,119 @@ mod test {
         ) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
+    }
+
+    struct TestIndex {
+        handle: Option<Handle>,
+    }
+
+    impl TestIndex {
+        fn new() -> TestIndex {
+            TestIndex { handle: None }
+        }
+
+        fn get(&self) -> Result<Handle, Box<dyn Error>> {
+            match self.handle {
+                None => Err(Box::new(RuleError::Generic(String::from(
+                    "No handle stored yet",
+                )))),
+                Some(handle) => Ok(handle),
+            }
+        }
+    }
+
+    impl Index for TestIndex {
+        type AttributeValueType = u32;
+
+        fn set_attribute(
+            &mut self,
+            handle: Handle,
+            _new_value: &u32,
+        ) -> Result<(), Box<dyn Error>> {
+            self.handle = Some(handle);
+            Ok(())
+        }
+
+        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
+            self.handle = None;
+            Ok(())
+        }
+    }
+
+    attribute!(DummyAttribute2: u32, indexed by TestIndex);
+
+    #[test]
+    fn index_test() {
+        let mut universe = Universe::new();
+        universe.add_index(&DummyAttribute2, TestIndex::new());
+
+        let handle = Handle::new();
+        universe.add_entity(handle).unwrap();
+        universe.set_attribute(handle, &DummyAttribute, 2).unwrap();
+        universe.set_attribute(handle, &DummyAttribute2, 6).unwrap();
+
+        universe.add_entity(Handle::new()).unwrap();
+
+        let result = universe.get_index(&DummyAttribute2).unwrap().get().unwrap();
+        assert_eq!(result, handle);
+
+        universe.remove_entity(handle).unwrap();
+
+        assert!(universe.get_index(&FailingAttribute).is_err());
+    }
+
+    struct FailingIndex {}
+
+    static mut FAILING_INDEX_FAILS: bool = false;
+
+    impl FailingIndex {
+        fn return_result(&self) -> Result<(), Box<dyn Error>> {
+            if unsafe { FAILING_INDEX_FAILS } {
+                Err(Box::new(RuleError::Generic(String::from("Tripped error"))))
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    impl Index for FailingIndex {
+        type AttributeValueType = u32;
+
+        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
+            self.return_result()
+        }
+
+        fn set_attribute(
+            &mut self,
+            _handle: Handle,
+            _new_value: &Self::AttributeValueType,
+        ) -> Result<(), Box<dyn Error>> {
+            self.return_result()
+        }
+    }
+
+    attribute!(FailingAttribute: u32, indexed by FailingIndex);
+
+    #[test]
+    fn failing_index() {
+        let mut universe = Universe::new();
+        universe.add_index(&FailingAttribute, FailingIndex {});
+
+        let handle = Handle::new();
+        universe.add_entity(handle).unwrap();
+
+        let handle2 = Handle::new();
+        universe.add_entity(handle2).unwrap();
+        universe
+            .set_attribute(handle2, &FailingAttribute, 1)
+            .unwrap();
+
+        universe.set_attribute(handle, &FailingAttribute, 2).unwrap();
+
+        unsafe {
+            FAILING_INDEX_FAILS = true;
+        }
+
+        assert!(universe.remove_entity(handle).is_err());
     }
 }
