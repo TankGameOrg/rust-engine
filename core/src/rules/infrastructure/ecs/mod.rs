@@ -13,7 +13,7 @@
 //!     let mut transaction = Transaction::new();
 //!
 //!     for handle in universe.gather(&|handle| *universe.get_attribute(handle, &Health).unwrap_or(&0) > 0) {
-//!         modify_entity!(&mut transaction, handle, {
+//!         modify_entity_transaction!(&mut transaction, handle, {
 //!             Health = universe.get_attribute(handle, &Health)? - 1
 //!         });
 //!     }
@@ -34,23 +34,21 @@
 //! let mut universe = Universe::new();
 //!
 //! // Let's add a few Entities to our universe
-//! // Unlike the normal create_entity!() create_entity_immidate!() operates directly on the universe
-//! // and applies immidatly
-//! let tank1_handle = create_entity_immidate!(&mut universe, {
+//! let tank1_handle = create_entity!(&mut universe, {
 //!     Health = 2
 //! })?;
 //!
-//! let tank2_handle = create_entity_immidate!(&mut universe, {
+//! let tank2_handle = create_entity!(&mut universe, {
 //!     Health = 1
 //! })?;
 //!
-//! let damage1_transaction = damage_living(&universe)?;
+//! let damage1_transactionaction = damage_living(&universe)?;
 //!
 //! let tank1_health = *universe.get_attribute(tank1_handle, &Health)?;
 //! // Tank1 still has 2 heath because the transaction hasn't been applied
 //! assert_eq!(tank1_health, 2);
 //!
-//! damage1_transaction.apply(&mut universe)?;
+//! damage1_transactionaction.apply(&mut universe)?;
 //!
 //! let tank1_health = *universe.get_attribute(tank1_handle, &Health)?;
 //! let tank2_health = *universe.get_attribute(tank2_handle, &Health)?;
@@ -145,7 +143,7 @@
 //!     let mut transaction = Transaction::new();
 //!
 //!     for handle in universe.get_index(&Health).gather_living() {
-//!         modify_entity!(&mut transaction, handle, {
+//!         modify_entity_transaction!(&mut transaction, handle, {
 //!             Health = universe.get_attribute(handle, &Health)? - 1
 //!         });
 //!     }
@@ -170,11 +168,11 @@
 //! universe.add_index(&Health, LivingEntities::new());
 //!
 //! // The rest of this example will behave identically to the previous one
-//! let tank1_handle = create_entity_immidate!(&mut universe, {
+//! let tank1_handle = create_entity!(&mut universe, {
 //!     Health = 2
 //! })?;
 //!
-//! let tank2_handle = create_entity_immidate!(&mut universe, {
+//! let tank2_handle = create_entity!(&mut universe, {
 //!     Health = 1
 //! })?;
 //!

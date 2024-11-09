@@ -307,6 +307,80 @@ impl std::fmt::Debug for Universe {
     }
 }
 
+
+/// Create an entity with the specified attributes
+///
+/// ```
+/// # use tank_game_core::attribute;
+/// # use std::error::Error;
+/// # use tank_game_core::rules::infrastructure::ecs::Universe;
+/// # use tank_game_core::create_entity;
+/// # attribute!(DummyAttribute: u32);
+/// # attribute!(DummyAttribute2: u32);
+/// #
+/// let mut universe = Universe::new();
+/// let new_handle = create_entity!(&mut universe, {
+///     DummyAttribute = 3,
+///     DummyAttribute2 = 4
+/// })?;
+/// #
+/// # Ok::<(), Box<dyn Error>>(())
+/// ```
+#[macro_export]
+macro_rules! create_entity {
+    ($universe:expr, $($token:tt)*) => {
+        {
+            use $crate::modify_entity;
+
+            let universe: &mut $crate::rules::infrastructure::ecs::Universe = $universe;
+
+            let handle = universe.add_entity();
+
+            modify_entity!(universe, handle, $($token)*)
+                .map(|()| handle)
+        }
+    };
+}
+
+/// Set the specified attributes on an existing entity
+///
+/// ```
+/// # use tank_game_core::attribute;
+/// # use std::error::Error;
+/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
+/// # use tank_game_core::{create_entity, modify_entity};
+/// # attribute!(DummyAttribute: u32);
+/// # attribute!(DummyAttribute2: u32);
+/// #
+/// let mut universe = Universe::new();
+/// # let dummy_handle = create_entity!(&mut universe, { DummyAttribute = 3 })?;
+/// modify_entity!(&mut universe, dummy_handle, {
+///     DummyAttribute = 3,
+///     DummyAttribute2 = 4
+/// })?;
+/// #
+/// # Ok::<(), Box<dyn Error>>(())
+/// ```
+#[macro_export]
+macro_rules! modify_entity {
+    ($universe:expr, $handle:ident, { $($attribute:ident = $value:expr),+ }) => {
+        {
+            let universe: &mut $crate::rules::infrastructure::ecs::Universe = $universe;
+            let handle: $crate::rules::infrastructure::ecs::Handle = $handle;
+            let mut result = Ok(());
+
+            $(
+                if result.is_ok() {
+                    result = universe.set_attribute(handle, &$attribute, $value);
+                }
+            )+
+
+            result
+        }
+    };
+}
+
+
 #[cfg(test)]
 mod test {
     use std::error::Error;

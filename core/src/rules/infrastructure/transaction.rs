@@ -138,26 +138,26 @@ impl Transaction {
 /// # use tank_game_core::attribute;
 /// # use tank_game_core::rules::infrastructure::ecs::Attribute;
 /// # use tank_game_core::rules::infrastructure::transaction::Transaction;
-/// # use tank_game_core::create_entity;
+/// # use tank_game_core::create_entity_transaction;
 /// # attribute!(DummyAttribute: u32);
 /// #
 /// let mut transaction = Transaction::new();
-/// let new_handle = create_entity!(&mut transaction, {
+/// let new_handle = create_entity_transaction!(&mut transaction, {
 ///     DummyAttribute = 3
 /// });
 /// ```
 #[macro_export]
-macro_rules! create_entity {
+macro_rules! create_entity_transaction {
     ($transaction:expr, { $($($attribute:ident = $value:expr)*),+ }) => {
         {
-            use $crate::modify_entity;
+            use $crate::modify_entity_transaction;
 
             let transaction: &mut $crate::rules::infrastructure::transaction::Transaction = $transaction;
 
             let (handle, new_entity_modification) = $crate::rules::infrastructure::transaction::CreateEntityModification::new();
             transaction.add(new_entity_modification);
 
-            modify_entity!(transaction, handle, {
+            modify_entity_transaction!(transaction, handle, {
                 $(
                     $($attribute = $value)*
                 ),+
@@ -174,17 +174,17 @@ macro_rules! create_entity {
 /// # use tank_game_core::attribute;
 /// # use tank_game_core::rules::infrastructure::ecs::Attribute;
 /// # use tank_game_core::rules::infrastructure::transaction::Transaction;
-/// # use tank_game_core::{create_entity,modify_entity};
+/// # use tank_game_core::{create_entity_transaction,modify_entity_transaction};
 /// # attribute!(DummyAttribute: u32);
 /// #
 /// let mut transaction = Transaction::new();
-/// # let dummy_handle = create_entity!(&mut transaction, { DummyAttribute = 3 });
-/// modify_entity!(&mut transaction, dummy_handle, {
+/// # let dummy_handle = create_entity_transaction!(&mut transaction, { DummyAttribute = 3 });
+/// modify_entity_transaction!(&mut transaction, dummy_handle, {
 ///     DummyAttribute = 2
 /// });
 /// ```
 #[macro_export]
-macro_rules! modify_entity {
+macro_rules! modify_entity_transaction {
     ($transaction:expr, $handle:expr, { $($attribute:ident = $value:expr),+ }) => {
         {
             let transaction: &mut $crate::rules::infrastructure::transaction::Transaction = $transaction;
@@ -196,77 +196,9 @@ macro_rules! modify_entity {
     };
 }
 
-/// Like create_entity! but it creates a transaction and applies it immidately
-///
-/// ```
-/// # use tank_game_core::attribute;
-/// # use std::error::Error;
-/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
-/// # use tank_game_core::create_entity_immidate;
-/// # attribute!(DummyAttribute: u32);
-/// #
-/// let mut universe = Universe::new();
-/// let new_handle = create_entity_immidate!(&mut universe, {
-///     DummyAttribute = 3
-/// })?;
-/// # Ok::<(), Box<dyn Error>>(())
-/// ```
-#[macro_export]
-macro_rules! create_entity_immidate {
-    ($universe:expr, $($token:tt)*) => {
-        {
-            use $crate::create_entity;
-            use $crate::rules::infrastructure::transaction::Transaction;
-
-            let universe: &mut Universe = $universe;
-            let mut transaction = Transaction::new();
-
-            let handle = create_entity!(&mut transaction, $($token)*);
-
-            match transaction.apply(universe) {
-                Ok(()) => Ok(handle),
-                Err(err) => Err(err),
-            }
-        }
-    };
-}
-
-/// Like modify_entity! but it creates a transaction and applies it immidately
-///
-/// ```
-/// # use tank_game_core::attribute;
-/// # use std::error::Error;
-/// # use tank_game_core::rules::infrastructure::ecs::{Attribute, Universe};
-/// # use tank_game_core::{create_entity_immidate, modify_entity_immidate};
-/// # attribute!(DummyAttribute: u32);
-/// #
-/// let mut universe = Universe::new();
-/// # let dummy_handle = create_entity_immidate!(&mut universe, { DummyAttribute = 3 })?;
-/// modify_entity_immidate!(&mut universe, dummy_handle, {
-///     DummyAttribute = 3
-/// })?;
-/// # Ok::<(), Box<dyn Error>>(())
-/// ```
-#[macro_export]
-macro_rules! modify_entity_immidate {
-    ($universe:expr, $($token:tt)*) => {
-        {
-            use $crate::modify_entity;
-            use $crate::rules::infrastructure::transaction::Transaction;
-
-            let universe: &mut Universe = $universe;
-            let mut transaction = Transaction::new();
-
-            modify_entity!(&mut transaction, $($token)*);
-
-            transaction.apply(universe)
-        }
-    };
-}
-
 #[cfg(test)]
 mod test {
-    use crate::attribute;
+    use crate::{attribute, create_entity};
 
     use super::*;
 
@@ -276,7 +208,7 @@ mod test {
     fn transaction_test() {
         let mut universe = Universe::new();
 
-        let handle = create_entity_immidate!(&mut universe, { DummyAttribute = 2 }).unwrap();
+        let handle = create_entity!(&mut universe, { DummyAttribute = 2 }).unwrap();
         assert_eq!(*universe.get_attribute(handle, &DummyAttribute).unwrap(), 2);
 
         let mut transaction = Transaction::new();
