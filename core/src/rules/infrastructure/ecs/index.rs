@@ -5,6 +5,8 @@ use std::{
 
 use as_any::AsAny;
 
+use super::AttributeValue;
+
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub struct Handle(usize);
@@ -31,7 +33,19 @@ impl Default for Handle {
 /// but it does not provide an api for querying the index.  It is assumed that users will downcast
 /// the index and call an index specific query API.
 pub trait Index: AsAny {
-    type AttributeValueType;
+    type AttributeValueType: AttributeValue;
+
+    /// Start tracking a entity after the attribute this index tracks has been added to it
+    ///
+    /// `add_attribute` can only be called with handles that are not currently store by this index.
+    /// so add_attribute add_attribute is invalid but add_attribute remove_attribute add_attribute is valid.
+    ///
+    /// If an error is returned, the transaction that triggered the entity add will not be applied
+    fn add_attribute(
+        &mut self,
+        handle: Handle,
+        new_value: &Self::AttributeValueType,
+    ) -> Result<(), Box<dyn Error>>;
 
     /// The value of the attribute that this index tracks has been updated
     ///
@@ -40,11 +54,15 @@ pub trait Index: AsAny {
     /// `add_attribute` or `update_attribute` call.
     ///
     /// If an error is returned, the transaction that triggered the entity update will not be applied
-    fn set_attribute(
+    fn update_attribute(
         &mut self,
         handle: Handle,
+        old_value: &Self::AttributeValueType,
         new_value: &Self::AttributeValueType,
-    ) -> Result<(), Box<dyn Error>>;
+    ) -> Result<(), Box<dyn Error>> {
+        self.remove_attribute(handle, old_value)?;
+        self.add_attribute(handle, new_value)
+    }
 
     /// Stop tracking a entity after the attribute this index tracks was removed
     ///
@@ -54,5 +72,5 @@ pub trait Index: AsAny {
     /// tracked by the index.
     ///
     /// If an error is returned, the transaction that triggered the entity remove will not still be applied
-    fn remove_attribute(&mut self, handle: Handle) -> Result<(), Box<dyn Error>>;
+    fn remove_attribute(&mut self, handle: Handle, old_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>>;
 }

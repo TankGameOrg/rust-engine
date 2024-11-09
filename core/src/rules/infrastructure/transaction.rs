@@ -52,7 +52,7 @@ impl<T: AttributeValue> UnsetAttributeModification<T> {
     }
 }
 
-impl<T: AttributeValue> Modification for UnsetAttributeModification<T> {
+impl<T: AttributeValue + Clone> Modification for UnsetAttributeModification<T> {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
         universe.remove_attribute(self.handle, self.attribute)
     }

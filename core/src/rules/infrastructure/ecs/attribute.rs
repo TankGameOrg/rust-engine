@@ -120,11 +120,12 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 ///     // ... impl removed for brevity ...
 /// #    fn remove_attribute(
 /// #            &mut self,
-/// #            _handle: Handle
+/// #            _handle: Handle,
+/// #            _old_value: &Self::AttributeValueType
 /// #        ) -> Result<(), Box<dyn std::error::Error>> {
 /// #        Ok(())
 /// #    }
-/// #    fn set_attribute(
+/// #    fn add_attribute(
 /// #            &mut self,
 /// #            _handle: Handle,
 /// #            _new_value: &Self::AttributeValueType,

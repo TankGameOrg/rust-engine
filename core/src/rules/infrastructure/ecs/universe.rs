@@ -14,33 +14,54 @@ use super::{
 ///
 /// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
 pub trait AnyIndex: AsAny {
-    fn set_attribute_dynamic(
+    fn add_attribute_dynamic(
         &mut self,
         handle: Handle,
         new_value: &dyn AttributeValue,
     ) -> Result<(), Box<dyn Error>>;
-    fn remove_attribute_dynamic(&mut self, handle: Handle) -> Result<(), Box<dyn Error>>;
+    fn update_attribute_dynamic(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>>;
+    fn remove_attribute_dynamic(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
+}
+
+fn cast_index_value<T: AttributeValue>(value: &dyn AttributeValue) -> Result<&T, Box<dyn Error>> {
+    Ok(value
+            .downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Failed to cast value to {} from {:?}",
+                stringify!(T),
+                value.type_id()
+            ))))?)
 }
 
 impl<F: Index> AnyIndex for F {
-    fn set_attribute_dynamic(
-        &mut self,
-        handle: Handle,
-        new_value: &dyn AttributeValue,
-    ) -> Result<(), Box<dyn Error>> {
-        let new_value = new_value
-            .downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!(
-                "Failed to cast new_value to {} from {:?}",
-                stringify!(AttributeValueType),
-                new_value.type_id()
-            ))))?;
-
-        self.set_attribute(handle, new_value)
+    fn add_attribute_dynamic(
+            &mut self,
+            handle: Handle,
+            new_value: &dyn AttributeValue,
+        ) -> Result<(), Box<dyn Error>> {
+        let new_value = cast_index_value(new_value)?;
+        self.add_attribute(handle, new_value)
     }
 
-    fn remove_attribute_dynamic(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
-        self.remove_attribute(handle)
+    fn update_attribute_dynamic(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>> {
+        let new_value = cast_index_value(new_value)?;
+        let old_value = cast_index_value(old_value)?;
+        self.update_attribute(handle, old_value, new_value)
+    }
+
+    fn remove_attribute_dynamic(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
+        let old_value = cast_index_value(old_value)?;
+        self.remove_attribute(handle, old_value)
     }
 }
 
@@ -99,14 +120,21 @@ impl Universe {
     ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn set_attribute<T: AttributeValue>(
+    pub fn set_attribute<T: AttributeValue + Clone>(
         &mut self,
         handle: Handle,
         key: &'static dyn Attribute<T>,
         value: T,
     ) -> Result<(), Box<dyn Error>> {
+        let old_value = self.get_entity(handle)?.get(key).ok().cloned();
+
         if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
-            index.set_attribute_dynamic(handle, &value)?;
+            if let Some(old_value) = old_value {
+                index.update_attribute_dynamic(handle, &old_value, &value)?;
+            }
+            else {
+                index.add_attribute_dynamic(handle, &value)?;
+            }
         }
 
         self.get_entity_mut(handle)?.set(key, value);
@@ -117,13 +145,15 @@ impl Universe {
     ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn remove_attribute<T: AttributeValue>(
+    pub fn remove_attribute<T: AttributeValue + Clone>(
         &mut self,
         handle: Handle,
         key: &dyn Attribute<T>,
     ) -> Result<(), Box<dyn Error>> {
+        let old_value = self.get_entity(handle)?.get(key)?.clone();
+
         if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
-            index.remove_attribute_dynamic(handle)?;
+            index.remove_attribute_dynamic(handle, &old_value)?;
         }
 
         self.get_entity_mut(handle)?.remove(key.as_any_attribute());
@@ -190,9 +220,9 @@ impl Universe {
                 handle
             )))),
             Some(entity) => {
-                for (attribute, _) in &entity {
+                for (attribute, old_value) in &entity {
                     if let Some(index) = self.indicies.get_mut(attribute) {
-                        index.remove_attribute_dynamic(handle)?;
+                        index.remove_attribute_dynamic(handle, old_value)?;
                     }
                 }
 
@@ -350,10 +380,10 @@ mod test {
 
     impl Index for DummyIndex {
         type AttributeValueType = u32;
-        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
+        fn remove_attribute(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
             Ok(())
         }
-        fn set_attribute(
+        fn add_attribute(
             &mut self,
             _handle: Handle,
             _new_value: &Self::AttributeValueType,
@@ -384,7 +414,7 @@ mod test {
     impl Index for TestIndex {
         type AttributeValueType = u32;
 
-        fn set_attribute(
+        fn add_attribute(
             &mut self,
             handle: Handle,
             _new_value: &u32,
@@ -393,7 +423,7 @@ mod test {
             Ok(())
         }
 
-        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
+        fn remove_attribute(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
             self.handle = None;
             Ok(())
         }
@@ -436,11 +466,11 @@ mod test {
     impl Index for FailingIndex {
         type AttributeValueType = u32;
 
-        fn remove_attribute(&mut self, _handle: Handle) -> Result<(), Box<dyn Error>> {
+        fn remove_attribute(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
             self.return_result()
         }
 
-        fn set_attribute(
+        fn add_attribute(
             &mut self,
             _handle: Handle,
             _new_value: &Self::AttributeValueType,
