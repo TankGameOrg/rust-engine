@@ -86,12 +86,17 @@ impl Universe {
         }
     }
 
+    /// Add an entity and create a new handle
+    pub fn add_entity(&mut self) -> Handle {
+        let handle = Handle::new();
+        self.entities.insert(handle, Entity::new());
+        handle
+    }
+
     /// Add an Entity with an existing handle
     ///
-    /// This method exists to allow the CreateEntityModification to return a handle when it's created even though the entity
-    /// itself hasn't been created yet
-    #[inline]
-    pub fn add_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
+    /// Most users should call add_entity() and use the handle it gives you
+    pub(in crate::rules::infrastructure) fn add_entity_with_handle(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         if self.entities.contains_key(&handle) {
             let current = self.entities.get(&handle).unwrap();
             return Err(Box::new(RuleError::Generic(format!(
@@ -313,8 +318,7 @@ mod test {
     #[test]
     fn can_modify_and_retrieve_entities() {
         let mut universe = Universe::new();
-        let handle = Handle::new();
-        universe.add_entity(handle).unwrap();
+        let handle = universe.add_entity();
         universe.set_attribute(handle, &DummyAttribute, 2).unwrap();
 
         assert_eq!(*universe.get_attribute(handle, &DummyAttribute).unwrap(), 2);
@@ -323,30 +327,26 @@ mod test {
     #[test]
     fn can_add_a_entity_with_an_existing_handle() {
         let mut universe = Universe::new();
-        let handle = Handle::new();
+        let handle = universe.add_entity();
 
-        universe.add_entity(handle).unwrap();
-
-        let error = universe.add_entity(handle);
+        let error = universe.add_entity_with_handle(handle);
         assert!(error.is_err());
     }
 
     #[test]
     fn can_gather_entities() {
         let mut universe = Universe::new();
-        let first_handle = Handle::new();
-        universe.add_entity(first_handle).unwrap();
+        let first_handle = universe.add_entity();
         universe
             .set_attribute(first_handle, &DummyAttribute, 2)
             .unwrap();
 
-        let second_handle = Handle::new();
-        universe.add_entity(second_handle).unwrap();
+        let second_handle = universe.add_entity();
         universe
             .set_attribute(second_handle, &DummyAttribute, 1)
             .unwrap();
 
-        universe.add_entity(Handle::new()).unwrap();
+        let _ = universe.add_entity();
 
         // Gather one of the entities
         let one: Vec<Handle> = universe
@@ -436,12 +436,11 @@ mod test {
         let mut universe = Universe::new();
         universe.add_index(&DummyAttribute2, TestIndex::new());
 
-        let handle = Handle::new();
-        universe.add_entity(handle).unwrap();
+        let handle = universe.add_entity();
         universe.set_attribute(handle, &DummyAttribute, 2).unwrap();
         universe.set_attribute(handle, &DummyAttribute2, 6).unwrap();
 
-        universe.add_entity(Handle::new()).unwrap();
+        let _ = universe.add_entity();
 
         let result = universe.get_index(&DummyAttribute2).get().unwrap();
         assert_eq!(result, handle);
@@ -486,11 +485,8 @@ mod test {
         let mut universe = Universe::new();
         universe.add_index(&FailingAttribute, FailingIndex {});
 
-        let handle = Handle::new();
-        universe.add_entity(handle).unwrap();
-
-        let handle2 = Handle::new();
-        universe.add_entity(handle2).unwrap();
+        let handle = universe.add_entity();
+        let handle2 = universe.add_entity();
         universe
             .set_attribute(handle2, &FailingAttribute, 1)
             .unwrap();

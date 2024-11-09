@@ -73,7 +73,7 @@ impl CreateEntityModification {
 
 impl Modification for CreateEntityModification {
     fn apply(&self, universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-        universe.add_entity(self.handle)?;
+        universe.add_entity_with_handle(self.handle)?;
         Ok(())
     }
 }

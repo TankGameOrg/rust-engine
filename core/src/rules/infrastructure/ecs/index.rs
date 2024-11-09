@@ -9,12 +9,12 @@ use super::AttributeValue;
 
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
+#[must_use]
 pub struct Handle(usize);
 
 static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0);
 
 impl Handle {
-    // TODO: PRIVATE
     #[inline]
     pub fn new() -> Handle {
         Handle(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed))
