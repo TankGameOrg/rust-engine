@@ -298,6 +298,18 @@ impl Universe {
         self.indicies
             .insert(attribute.as_any_attribute(), Box::new(index));
     }
+
+    /// Add the default version of an index to optimize queries
+    ///
+    /// All indicies must be added before any entities are and each attribute can only have one index
+    #[inline]
+    pub fn add_default_index<ValueType, IndexType>(
+        &mut self,
+        attribute: &'static dyn IndexedBy<ValueType, IndexType>,
+    )   where ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType> + Default
+     {
+        self.add_index(attribute, Default::default());
+    }
 }
 
 impl std::fmt::Debug for Universe {

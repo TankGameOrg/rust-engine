@@ -1,8 +1,9 @@
 //! The tools used to define rules and their assosiated data
 
-pub mod ecs;
 mod error;
-pub mod transaction;
 mod utilities;
+pub mod ecs;
+pub mod transaction;
+pub mod indicies;
 
 pub use error::RuleError;
