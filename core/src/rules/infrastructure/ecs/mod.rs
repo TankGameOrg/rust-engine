@@ -81,13 +81,6 @@
 //! }
 //!
 //! impl LivingEntities {
-//!     fn new() -> LivingEntities {
-//!         LivingEntities {
-//!             living: HashSet::new(),
-//!             dead: HashSet::new(),
-//!         }
-//!     }
-//!
 //!     // Each index defines it's own functions for finding/gathering entities by the attribute that it tracks
 //!     fn gather_living<'iter>(&'iter self) -> impl Iterator<Item=Handle> + 'iter {
 //!         self.living.iter().cloned()
@@ -95,6 +88,15 @@
 //!
 //!     fn gather_dead<'iter>(&'iter self) -> impl Iterator<Item=Handle> + 'iter {
 //!         self.dead.iter().cloned()
+//!     }
+//! }
+//! 
+//! impl Default for LivingEntities {
+//!     fn default() -> LivingEntities {
+//!         LivingEntities {
+//!             living: HashSet::new(),
+//!             dead: HashSet::new(),
+//!         }
 //!     }
 //! }
 //!
@@ -162,10 +164,6 @@
 //! }
 //!
 //! let mut universe = Universe::new();
-//! // After we construct our Universe we need to register LivingEntities as the index for Health
-//! // so that the index knows to update it each time we modify the Health attribute.
-//! // If you comment out this line LivingEntities::gather_* will fail with "Could not find an index for Health")
-//! universe.add_index(&Health, LivingEntities::new());
 //!
 //! // The rest of this example will behave identically to the previous one
 //! let tank1_handle = create_entity!(&mut universe, {
@@ -196,5 +194,5 @@ mod index;
 mod universe;
 
 pub use attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy};
-pub use index::{Handle, Index};
+pub use index::{Handle, Index, AnyIndex};
 pub use universe::Universe;

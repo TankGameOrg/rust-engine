@@ -14,7 +14,6 @@ use super::{ecs::{AttributeValue, Handle, Index}, RuleError};
 /// attribute!(DummyAttribute: u32, indexed by HasAttribute<u32>);
 /// 
 /// let mut universe = Universe::new();
-/// universe.add_default_index(&DummyAttribute);
 /// 
 /// // Create an entity with the attribute we want to track
 /// let handle = create_entity!(&mut universe, {
@@ -94,7 +93,6 @@ impl<T: AttributeValue + Hash + std::cmp::Eq + Clone> HashableAttribute for T {}
 /// attribute!(DummyUnique: u32, indexed by UniqueValueIndex<u32>);
 /// 
 /// let mut universe = Universe::new();
-/// universe.add_default_index(&DummyUnique);
 /// 
 /// let _ = create_entity!(&mut universe, { DummyUnique = 1 })?;
 /// 
@@ -116,7 +114,6 @@ impl<T: AttributeValue + Hash + std::cmp::Eq + Clone> HashableAttribute for T {}
 /// # attribute!(DummyUnique: u32, indexed by UniqueValueIndex<u32>);
 /// #
 /// let mut universe = Universe::new();
-/// universe.add_default_index(&DummyUnique);
 /// 
 /// let _ = create_entity!(&mut universe, { DummyUnique = 1 })?;
 ///
@@ -187,7 +184,6 @@ mod test {
     #[test]
     fn test_has_attribute() {
         let mut universe = Universe::new();
-        universe.add_default_index(&DummyHas);
 
         // Create an entity with the attribute we want to track
         let handle = create_entity!(&mut universe, {
@@ -206,7 +202,6 @@ mod test {
     #[test]
     fn test_unique_index() {
         let mut universe = Universe::new();
-        universe.add_default_index(&DummyUnique);
 
         let one = create_entity!(&mut universe, { DummyUnique = 1 }).unwrap();
         let two = create_entity!(&mut universe, { DummyUnique = 2 }).unwrap();

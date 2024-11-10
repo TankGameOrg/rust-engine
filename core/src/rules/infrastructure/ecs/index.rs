@@ -3,7 +3,9 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use as_any::AsAny;
+use as_any::{AsAny, Downcast};
+
+use crate::rules::infrastructure::RuleError;
 
 use super::AttributeValue;
 
@@ -32,7 +34,7 @@ impl Default for Handle {
 /// The Index trait provides a set of methods to update the index when an attribute changes
 /// but it does not provide an api for querying the index.  It is assumed that users will downcast
 /// the index and call an index specific query API.
-pub trait Index: AsAny {
+pub trait Index: AsAny + Default {
     type AttributeValueType: AttributeValue;
 
     /// Start tracking a entity after the attribute this index tracks has been added to it
@@ -73,4 +75,60 @@ pub trait Index: AsAny {
     ///
     /// If an error is returned, the transaction that triggered the entity remove will not still be applied
     fn remove_attribute(&mut self, handle: Handle, old_value: &Self::AttributeValueType) -> Result<(), Box<dyn Error>>;
+}
+
+
+/// GenericIndex is the internal, boxable, representation of an index
+///
+/// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
+pub trait AnyIndex: AsAny {
+    fn add_attribute_dynamic(
+        &mut self,
+        handle: Handle,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>>;
+    fn update_attribute_dynamic(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>>;
+    fn remove_attribute_dynamic(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
+}
+
+fn cast_index_value<T: AttributeValue>(value: &dyn AttributeValue) -> Result<&T, Box<dyn Error>> {
+    Ok(value
+            .downcast_ref()
+            .ok_or(Box::new(RuleError::Generic(format!(
+                "Failed to cast value to {} from {:?}",
+                stringify!(T),
+                value.type_id()
+            ))))?)
+}
+
+impl<F: Index> AnyIndex for F {
+    fn add_attribute_dynamic(
+            &mut self,
+            handle: Handle,
+            new_value: &dyn AttributeValue,
+        ) -> Result<(), Box<dyn Error>> {
+        let new_value = cast_index_value(new_value)?;
+        self.add_attribute(handle, new_value)
+    }
+
+    fn update_attribute_dynamic(
+        &mut self,
+        handle: Handle,
+        old_value: &dyn AttributeValue,
+        new_value: &dyn AttributeValue,
+    ) -> Result<(), Box<dyn Error>> {
+        let new_value = cast_index_value(new_value)?;
+        let old_value = cast_index_value(old_value)?;
+        self.update_attribute(handle, old_value, new_value)
+    }
+
+    fn remove_attribute_dynamic(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
+        let old_value = cast_index_value(old_value)?;
+        self.remove_attribute(handle, old_value)
+    }
 }

@@ -1,69 +1,14 @@
 use std::{collections::HashMap, error::Error};
 
-use as_any::{AsAny, Downcast};
+use as_any::Downcast;
 
 use crate::rules::infrastructure::error::RuleError;
 
 use super::{
     attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy},
     entity::Entity,
-    index::{Handle, Index},
+    index::{AnyIndex, Handle, Index},
 };
-
-/// GenericIndex is the internal, boxable, representation of an index
-///
-/// It allows us to store Indicies with multiple AttributeValue types in the same HashMap
-pub trait AnyIndex: AsAny {
-    fn add_attribute_dynamic(
-        &mut self,
-        handle: Handle,
-        new_value: &dyn AttributeValue,
-    ) -> Result<(), Box<dyn Error>>;
-    fn update_attribute_dynamic(
-        &mut self,
-        handle: Handle,
-        old_value: &dyn AttributeValue,
-        new_value: &dyn AttributeValue,
-    ) -> Result<(), Box<dyn Error>>;
-    fn remove_attribute_dynamic(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>>;
-}
-
-fn cast_index_value<T: AttributeValue>(value: &dyn AttributeValue) -> Result<&T, Box<dyn Error>> {
-    Ok(value
-            .downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!(
-                "Failed to cast value to {} from {:?}",
-                stringify!(T),
-                value.type_id()
-            ))))?)
-}
-
-impl<F: Index> AnyIndex for F {
-    fn add_attribute_dynamic(
-            &mut self,
-            handle: Handle,
-            new_value: &dyn AttributeValue,
-        ) -> Result<(), Box<dyn Error>> {
-        let new_value = cast_index_value(new_value)?;
-        self.add_attribute(handle, new_value)
-    }
-
-    fn update_attribute_dynamic(
-        &mut self,
-        handle: Handle,
-        old_value: &dyn AttributeValue,
-        new_value: &dyn AttributeValue,
-    ) -> Result<(), Box<dyn Error>> {
-        let new_value = cast_index_value(new_value)?;
-        let old_value = cast_index_value(old_value)?;
-        self.update_attribute(handle, old_value, new_value)
-    }
-
-    fn remove_attribute_dynamic(&mut self, handle: Handle, old_value: &dyn AttributeValue) -> Result<(), Box<dyn Error>> {
-        let old_value = cast_index_value(old_value)?;
-        self.remove_attribute(handle, old_value)
-    }
-}
 
 /// A collection of entities that can be queried by their attributes
 pub struct Universe {
@@ -133,7 +78,7 @@ impl Universe {
     ) -> Result<(), Box<dyn Error>> {
         let old_value = self.get_entity(handle)?.get(key).ok().cloned();
 
-        if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
+        if let Some(index) = self.get_index_mut(key) {
             if let Some(old_value) = old_value {
                 index.update_attribute_dynamic(handle, &old_value, &value)?;
             }
@@ -153,7 +98,7 @@ impl Universe {
     pub fn remove_attribute<T: AttributeValue + Clone>(
         &mut self,
         handle: Handle,
-        key: &dyn Attribute<T>,
+        key: &'static dyn Attribute<T>,
     ) -> Result<(), Box<dyn Error>> {
         let old_value = self.get_entity(handle)?.get(key)?.clone();
 
@@ -299,16 +244,17 @@ impl Universe {
             .insert(attribute.as_any_attribute(), Box::new(index));
     }
 
-    /// Add the default version of an index to optimize queries
-    ///
-    /// All indicies must be added before any entities are and each attribute can only have one index
-    #[inline]
-    pub fn add_default_index<ValueType, IndexType>(
-        &mut self,
-        attribute: &'static dyn IndexedBy<ValueType, IndexType>,
-    )   where ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType> + Default
-     {
-        self.add_index(attribute, Default::default());
+    /// Get a mutable reference to this attribute's index if this attribute has one
+    /// 
+    /// If the attribute has an index but we don't have an instance of it yet it will be created automatically
+    fn get_index_mut<T>(&mut self, attribute: &'static dyn Attribute<T>) -> Option<&mut dyn AnyIndex> where T: AttributeValue {
+        if !self.indicies.contains_key(attribute.as_any_attribute()) {
+            if let Some(new_index) = attribute.create_default_index() {
+                self.indicies.insert(attribute.as_any_attribute(), new_index);   
+            }
+        }
+
+        self.indicies.get_mut(attribute.as_any_attribute()).map(|index| index.as_mut())
     }
 }
 
@@ -462,6 +408,7 @@ mod test {
         assert!(two.contains(&second_handle));
     }
 
+    #[derive(Default)]
     struct DummyIndex;
 
     impl Index for DummyIndex {
@@ -483,10 +430,6 @@ mod test {
     }
 
     impl TestIndex {
-        fn new() -> TestIndex {
-            TestIndex { handle: None }
-        }
-
         fn get(&self) -> Result<Handle, Box<dyn Error>> {
             match self.handle {
                 None => Err(Box::new(RuleError::Generic(String::from(
@@ -494,6 +437,12 @@ mod test {
                 )))),
                 Some(handle) => Ok(handle),
             }
+        }
+    }
+
+    impl Default for TestIndex {
+        fn default() -> Self {
+            TestIndex { handle: None }
         }
     }
 
@@ -520,7 +469,6 @@ mod test {
     #[test]
     fn index_test() {
         let mut universe = Universe::new();
-        universe.add_index(&DummyAttribute2, TestIndex::new());
 
         let handle = universe.add_entity();
         universe.set_attribute(handle, &DummyAttribute, 2).unwrap();
@@ -534,7 +482,8 @@ mod test {
         universe.remove_entity(handle).unwrap();
     }
 
-    struct FailingIndex {}
+    #[derive(Default)]
+    struct FailingIndex;
 
     static mut FAILING_INDEX_FAILS: bool = false;
 

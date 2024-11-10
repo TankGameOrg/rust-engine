@@ -2,7 +2,7 @@ use std::{any::TypeId, hash::Hash};
 
 use as_any::AsAny;
 
-use super::{index::Handle, Index};
+use super::{index::{AnyIndex, Handle}, Index};
 
 /// The common ancestor for all attribute values
 pub trait AttributeValue: AsAny + std::fmt::Debug + Send + Sync {}
@@ -49,7 +49,11 @@ impl Hash for dyn AnyAttribute {
 
 /// An attribute that can be used to access/store data on an entity
 pub trait Attribute<ValueType: AttributeValue>: AnyAttribute {
+    /// Convert an attribute to the generic AnyAttribute type
     fn as_any_attribute(&self) -> &dyn AnyAttribute;
+
+    /// Construct the default index for this attribute (if one exists)
+    fn create_default_index(&self) -> Option<Box<dyn AnyIndex>>;
 }
 
 impl<ValueType: AttributeValue> std::fmt::Debug for dyn Attribute<ValueType> {
@@ -113,6 +117,7 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 /// # use tank_game_core::attribute;
 /// # use tank_game_core::rules::infrastructure::ecs::{Index, Handle};
 /// // Assuming you have an index type that supports your attribute
+/// # #[derive(Default)]
 /// struct MyIndex;
 ///
 /// impl Index for MyIndex {
@@ -155,11 +160,36 @@ macro_rules! attribute {
             fn as_any_attribute(&self) -> &dyn $crate::rules::infrastructure::ecs::AnyAttribute {
                 self
             }
+
+            fn create_default_index(&self) -> Option<Box<dyn $crate::rules::infrastructure::ecs::AnyIndex>> {
+                None
+            }
         }
     };
 
     ($access:vis $name:ident: $type:ty, indexed by $index:ty) => {
-        $crate::attribute!($access $name: $type);
+        $access struct $name;
+
+        impl $crate::rules::infrastructure::ecs::AnyAttribute for $name {
+            fn get_name(&self) -> &'static str {
+                stringify!($name)
+            }
+
+            fn get_value_type_id(&self) -> std::any::TypeId {
+                std::any::TypeId::of::<$type>()
+            }
+        }
+
+        impl $crate::rules::infrastructure::ecs::Attribute<$type> for $name {
+            fn as_any_attribute(&self) -> &dyn $crate::rules::infrastructure::ecs::AnyAttribute {
+                self
+            }
+
+            fn create_default_index(&self) -> Option<Box<dyn $crate::rules::infrastructure::ecs::AnyIndex>> {
+                let index: Box<$index> = Box::new(Default::default());
+                Some(index)
+            }
+        }
 
         impl $crate::rules::infrastructure::ecs::IndexedBy<$type, $index> for $name {}
     };
