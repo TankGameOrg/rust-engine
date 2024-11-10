@@ -5,7 +5,7 @@ use std::{
 
 use as_any::{AsAny, Downcast};
 
-use crate::rules::infrastructure::RuleError;
+use crate::basic_error;
 
 use super::AttributeValue;
 
@@ -99,11 +99,11 @@ pub trait AnyIndex: AsAny {
 fn cast_index_value<T: AttributeValue>(value: &dyn AttributeValue) -> Result<&T, Box<dyn Error>> {
     Ok(value
             .downcast_ref()
-            .ok_or(Box::new(RuleError::Generic(format!(
+            .ok_or(basic_error!(
                 "Failed to cast value to {} from {:?}",
                 stringify!(T),
                 value.type_id()
-            ))))?)
+            ))?)
 }
 
 impl<F: Index> AnyIndex for F {

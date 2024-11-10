@@ -6,4 +6,4 @@ pub mod ecs;
 pub mod transaction;
 pub mod indicies;
 
-pub use error::RuleError;
+pub use error::BasicError;

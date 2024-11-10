@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
-use crate::rules::infrastructure::RuleError;
+use crate::basic_error;
 
 use super::attribute::{AnyAttribute, Attribute, AttributeValue};
 
@@ -34,9 +34,7 @@ impl Entity {
                     );
                 }
             },
-            None => Err(Box::new(RuleError::AttributeNotFound {
-                name: key.get_name(),
-            })),
+            None => Err(basic_error!("Could not find attribute '{}'", key.get_name())),
         }
     }
 
@@ -107,9 +105,7 @@ impl std::fmt::Debug for Entity {
 
 #[cfg(test)]
 mod test {
-    use core::panic;
-
-    use crate::rules::infrastructure::{ecs::attribute::DummyAttribute, RuleError};
+    use crate::rules::infrastructure::ecs::attribute::DummyAttribute;
 
     use super::Entity;
 
@@ -158,17 +154,6 @@ mod test {
     #[test]
     fn getting_a_missing_attribute_returns_error() {
         let entity = Entity::new();
-
-        match entity.get(&DummyAttribute) {
-            Ok(_) => panic!("Result can't be ok"),
-            Err(err) => {
-                if let Some(RuleError::AttributeNotFound { name }) = err.downcast_ref::<RuleError>()
-                {
-                    assert_eq!(*name, "DummyAttribute");
-                } else {
-                    panic!("Error should be AttributeNotFound but got {:?}", err);
-                }
-            }
-        }
+        assert!(entity.get(&DummyAttribute).is_err());
     }
 }

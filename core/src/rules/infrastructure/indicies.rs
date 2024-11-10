@@ -2,7 +2,9 @@
 
 use std::{collections::{HashMap, HashSet}, hash::Hash, marker::PhantomData};
 
-use super::{ecs::{AttributeValue, Handle, Index}, RuleError};
+use crate::basic_error;
+
+use super::ecs::{AttributeValue, Handle, Index};
 
 /// An index that finds all entities with a given attribute
 /// ```
@@ -159,7 +161,7 @@ impl<T: HashableAttribute> Index for UniqueValueIndex<T> {
             new_value: &Self::AttributeValueType,
         ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(existing_handle) = self.by_value.get(new_value) {
-            Err(Box::new(RuleError::Generic(format!("The attribute value {:?} is already taken by {:?}", new_value, existing_handle))))
+            Err(basic_error!("The attribute value {:?} is already taken by {:?}", new_value, existing_handle))
         }
         else {
             self.by_value.insert(new_value.clone(), handle);

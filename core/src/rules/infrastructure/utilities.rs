@@ -15,6 +15,7 @@ macro_rules! match_type {
     ($any_var:ident, { $( $var_name:ident: $type:ty => $code:expr ),+ }) => {
         {
             use as_any::Downcast;
+            use $crate::basic_error;
 
             let type_id = $any_var.type_id();
             let mut value_handled = false;
@@ -31,7 +32,7 @@ macro_rules! match_type {
             )+
 
             if !value_handled {
-                Err(Box::new($crate::rules::infrastructure::RuleError::Generic(format!("No case found for type: {:?}", type_id))))
+                Err(basic_error!("No case found for type: {:?}", type_id))
             } else {
                 Ok(())
             }

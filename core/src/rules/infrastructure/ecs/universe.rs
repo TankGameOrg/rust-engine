@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
-use crate::rules::infrastructure::error::RuleError;
+use crate::basic_error;
 
 use super::{
     attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy},
@@ -44,10 +44,10 @@ impl Universe {
     pub(in crate::rules::infrastructure) fn add_entity_with_handle(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         if self.entities.contains_key(&handle) {
             let current = self.entities.get(&handle).unwrap();
-            return Err(Box::new(RuleError::Generic(format!(
+            return Err(basic_error!(
                 "The handle {:?} already exists in this universe (current = {:?})",
                 handle, current
-            ))));
+            ));
         }
 
         self.entities.insert(handle, Entity::new());
@@ -139,10 +139,10 @@ impl Universe {
     fn get_entity(&self, handle: Handle) -> Result<&Entity, Box<dyn Error>> {
         self.entities
             .get(&handle)
-            .ok_or(Box::new(RuleError::Generic(format!(
+            .ok_or(basic_error!(
                 "Entity for {:?} does not exist",
                 handle
-            ))))
+            ))
     }
 
     /// Get a mutable reference to the Entity pointed to by a haandle
@@ -152,10 +152,10 @@ impl Universe {
     fn get_entity_mut(&mut self, handle: Handle) -> Result<&mut Entity, Box<dyn Error>> {
         self.entities
             .get_mut(&handle)
-            .ok_or(Box::new(RuleError::Generic(format!(
+            .ok_or(basic_error!(
                 "Entity for {:?} does not exist",
                 handle
-            ))))
+            ))
     }
 
     /// Remove a entity from a universe
@@ -165,10 +165,10 @@ impl Universe {
         let optional_entity = self.entities.remove(&handle);
 
         match optional_entity {
-            None => Err(Box::new(RuleError::Generic(format!(
+            None => Err(basic_error!(
                 "The handle {:?} does not reference a valid entity",
                 handle
-            )))),
+            )),
             Some(entity) => {
                 for (attribute, old_value) in &entity {
                     if let Some(index) = self.indicies.get_mut(attribute) {
@@ -432,9 +432,9 @@ mod test {
     impl TestIndex {
         fn get(&self) -> Result<Handle, Box<dyn Error>> {
             match self.handle {
-                None => Err(Box::new(RuleError::Generic(String::from(
+                None => Err(basic_error!(
                     "No handle stored yet",
-                )))),
+                )),
                 Some(handle) => Ok(handle),
             }
         }
@@ -490,7 +490,7 @@ mod test {
     impl FailingIndex {
         fn return_result(&self) -> Result<(), Box<dyn Error>> {
             if unsafe { FAILING_INDEX_FAILS } {
-                Err(Box::new(RuleError::Generic(String::from("Tripped error"))))
+                Err(basic_error!("Tripped error"))
             } else {
                 Ok(())
             }
