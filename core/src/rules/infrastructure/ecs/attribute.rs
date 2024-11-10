@@ -7,12 +7,6 @@ use super::{index::{AnyIndex, Handle}, Index};
 /// The common ancestor for all attribute values
 pub trait AttributeValue: AsAny + std::fmt::Debug + Send + Sync {}
 
-impl AsRef<dyn AttributeValue> for dyn AttributeValue {
-    fn as_ref(&self) -> &dyn AttributeValue {
-        self
-    }
-}
-
 // Allow attributes to use u32
 impl AttributeValue for u32 {}
 impl AttributeValue for Handle {}
