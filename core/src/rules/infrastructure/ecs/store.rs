@@ -1,0 +1,97 @@
+use std::{any, collections::HashMap, sync::atomic::{AtomicUsize, Ordering}};
+
+use as_any::AsAny;
+
+use super::AttributeValue;
+
+/// A handle can be used to access and modify an Entity in a Universe
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
+#[must_use]
+pub struct Handle(usize);
+
+static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0);
+
+impl AttributeValue for Handle {}
+
+impl Handle {
+    #[inline]
+    pub fn new() -> Handle {
+        Handle(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Default for Handle {
+    fn default() -> Self {
+        Handle::new()
+    }
+}
+
+pub struct HandleIterator<'iter> {
+    iter: Box<dyn Iterator<Item = Handle> + 'iter>,
+}
+
+impl<'iter> HandleIterator<'iter> {
+    pub fn new(iter: impl Iterator<Item = &'iter Handle> + 'iter) -> HandleIterator<'iter> {
+        HandleIterator {
+            iter: Box::new(iter.map(|handle| *handle)),
+        }
+    }
+}
+
+impl<'iter> Iterator for HandleIterator<'iter> {
+    type Item = Handle;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+pub trait AttributeStore: AsAny {
+    fn get_attribute_type_name(&self) -> &'static str;
+
+    fn len(&self) -> usize;
+
+    fn iter_handles(&self) -> HandleIterator;
+
+    fn remove_attribute(&mut self, handle: Handle);
+}
+
+pub struct GenericAttributeStore<T: AttributeValue> {
+    values: HashMap<Handle, T>,
+}
+
+impl<T: AttributeValue> Default for GenericAttributeStore<T> {
+    fn default() -> Self {
+        GenericAttributeStore {
+            values: HashMap::new(),
+        }
+    }
+}
+
+impl<T: AttributeValue> GenericAttributeStore<T> {
+    pub fn get_attribute(&self, handle: Handle) -> &T {
+        self.values.get(&handle).unwrap()
+    }
+
+    pub fn set_attribute(&mut self, handle: Handle, value: T) {
+        self.values.insert(handle, value);
+    }
+}
+
+impl<T: AttributeValue> AttributeStore for GenericAttributeStore<T> {
+    fn get_attribute_type_name(&self) -> &'static str {
+        any::type_name::<T>()
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    fn iter_handles(&self) -> HandleIterator {
+        HandleIterator::new(self.values.keys())
+    }
+
+    fn remove_attribute(&mut self, handle: Handle) {
+        self.values.remove(& handle);
+    }
+}

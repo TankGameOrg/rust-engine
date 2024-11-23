@@ -1,23 +1,47 @@
-use std::{any::TypeId, hash::Hash};
+use std::{any::TypeId, hash::Hash, marker::PhantomData};
 
 use as_any::AsAny;
 
-use super::{index::{AnyIndex, Handle}, Index};
+/// The ID type used for an attribute
+pub type AttributeId = u8;
+
+/// The highest attribute value allowed
+/// 
+/// This must be 1 less than the u* for the signature::SignatureBitField.  So if signature::SignatureBitField is a u64 MAX_ATTRIBUTE_ID should be 63
+static MAX_ATTRIBUTE_ID: AttributeId = 63;
+
+static mut NEXT_ATTRIBUTE_ID: AttributeId = 0;
+
+/// Get a unique ID to use for this attribute
+fn assign_attribute_id() -> AttributeId {
+    unsafe {
+        let id = NEXT_ATTRIBUTE_ID;
+        assert!(id <= MAX_ATTRIBUTE_ID, "Too many attribute IDs have been assigned");
+        NEXT_ATTRIBUTE_ID += 1;
+        id
+    }
+}
 
 /// The common ancestor for all attribute values
 pub trait AttributeValue: AsAny + std::fmt::Debug + Send + Sync {}
 
-// Allow attributes to use u32
+// Allow attributes to use u32 and bool
 impl AttributeValue for u32 {}
-impl AttributeValue for Handle {}
+impl AttributeValue for bool {}
 
 /// AnyAttribute can be used to accept attributes of any type dynamically (basically `Attribute<impl Any>`)
 pub trait AnyAttribute: AsAny {
+    /// Get the ID of this attribute
+    fn get_attribute_id(&self) -> AttributeId;
+
     /// Get the name of this attribute
     fn get_name(&self) -> &'static str;
 
     /// Get the TypeId of this attribute's value
     fn get_value_type_id(&self) -> TypeId;
+
+    /// Check if an attrbute is just a flag (has no value)
+    fn is_flag(&self) -> bool;
 }
 
 impl std::fmt::Debug for dyn AnyAttribute {
@@ -42,37 +66,92 @@ impl Hash for dyn AnyAttribute {
 }
 
 /// An attribute that can be used to access/store data on an entity
-pub trait Attribute<ValueType: AttributeValue>: AnyAttribute {
-    /// Convert an attribute to the generic AnyAttribute type
-    fn as_any_attribute(&self) -> &dyn AnyAttribute;
-
-    /// Construct the default index for this attribute (if one exists)
-    fn create_default_index(&self) -> Option<Box<dyn AnyIndex>>;
+pub struct Attribute<ValueType: AttributeValue> {
+    attribute_id: AttributeId,
+    attribute_name: &'static str,
+    phantom: PhantomData<ValueType>,
 }
 
-impl<ValueType: AttributeValue> std::fmt::Debug for dyn Attribute<ValueType> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_any_attribute().fmt(f)
+impl<T: AttributeValue> Attribute<T> {
+    pub fn new(name: &'static str) -> Attribute<T> {
+        Attribute {
+            attribute_id: assign_attribute_id(),
+            attribute_name: name,
+            phantom: PhantomData,
+        }
     }
 }
 
-impl<ValueType: AttributeValue> PartialEq for dyn Attribute<ValueType> {
+impl<T: AttributeValue> AnyAttribute for Attribute<T> {
+    fn get_attribute_id(&self) -> AttributeId {
+        self.attribute_id
+    }
+
+    fn get_name(&self) -> &'static str {
+        self.attribute_name
+    }
+
+    fn get_value_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
+    }
+
+    fn is_flag(&self) -> bool {
+        false
+    }
+}
+
+impl<ValueType: AttributeValue> std::fmt::Debug for Attribute<ValueType> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (self as &dyn AnyAttribute).fmt(f)
+    }
+}
+
+impl<ValueType: AttributeValue> PartialEq for Attribute<ValueType> {
     fn eq(&self, other: &Self) -> bool {
-        self.get_name() == other.get_name()
+        self.get_attribute_id() == other.get_attribute_id()
     }
 }
 
-/// A marker used to indicate what type indexes this attribute
-pub trait IndexedBy<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>>:
-    Attribute<ValueType>
-{
+pub struct FlagAttribute {
+    attribute_id: AttributeId,
+    attribute_name: &'static str,
 }
 
-impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>> std::fmt::Debug
-    for dyn IndexedBy<ValueType, IndexType>
-{
+impl FlagAttribute {
+    pub fn new(name: &'static str) -> FlagAttribute {
+        FlagAttribute {
+            attribute_id: assign_attribute_id(),
+            attribute_name: name,
+        }
+    }
+}
+impl AnyAttribute for FlagAttribute {
+    fn get_attribute_id(&self) -> AttributeId {
+        self.attribute_id
+    }
+
+    fn get_name(&self) -> &'static str {
+        self.attribute_name
+    }
+
+    fn get_value_type_id(&self) -> TypeId {
+        TypeId::of::<()>()
+    }
+
+    fn is_flag(&self) -> bool {
+        true
+    }
+}
+
+impl std::fmt::Debug for FlagAttribute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_any_attribute().fmt(f)
+        (self as &dyn AnyAttribute).fmt(f)
+    }
+}
+
+impl PartialEq for FlagAttribute {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_attribute_id() == other.get_attribute_id()
     }
 }
 
@@ -90,13 +169,13 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 /// # use tank_game_core::rules::infrastructure::ecs::{Attribute, AttributeValue};
 /// #
 /// #[derive(Debug)]
-/// enum PetType {
+/// pub enum PetType {
 ///     Cat,
 ///     Dog,
 /// }
 ///
 /// #[derive(Debug)]
-/// struct PetValue {
+/// pub struct PetValue {
 ///     pet: PetType,
 ///     name: &'static str,
 /// }
@@ -105,90 +184,21 @@ impl<ValueType: AttributeValue, IndexType: Index<AttributeValueType = ValueType>
 ///
 /// attribute!(Pet: PetValue);
 /// ```
-///
-/// And finally you can specify an index which can by used to look up the attribute by value
-/// ```
-/// # use tank_game_core::attribute;
-/// # use tank_game_core::rules::infrastructure::ecs::{Index, Handle};
-/// // Assuming you have an index type that supports your attribute
-/// # #[derive(Default)]
-/// struct MyIndex;
-///
-/// impl Index for MyIndex {
-///     type AttributeValueType = u32;
-///     // ... impl removed for brevity ...
-/// #    fn remove_attribute(
-/// #            &mut self,
-/// #            _handle: Handle,
-/// #            _old_value: &Self::AttributeValueType
-/// #        ) -> Result<(), Box<dyn std::error::Error>> {
-/// #        Ok(())
-/// #    }
-/// #    fn add_attribute(
-/// #            &mut self,
-/// #            _handle: Handle,
-/// #            _new_value: &Self::AttributeValueType,
-/// #        ) -> Result<(), Box<dyn std::error::Error>> {
-/// #        Ok(())
-/// #    }
-/// }
-///
-/// attribute!(DemoAttribute: u32, indexed by MyIndex);
-/// ```
 #[macro_export]
 macro_rules! attribute {
-    ($access:vis $name:ident: $type:ty) => {
-        $access struct $name;
-
-        impl $crate::rules::infrastructure::ecs::AnyAttribute for $name {
-            fn get_name(&self) -> &'static str {
-                stringify!($name)
-            }
-
-            fn get_value_type_id(&self) -> std::any::TypeId {
-                std::any::TypeId::of::<$type>()
-            }
-        }
-
-        impl $crate::rules::infrastructure::ecs::Attribute<$type> for $name {
-            fn as_any_attribute(&self) -> &dyn $crate::rules::infrastructure::ecs::AnyAttribute {
-                self
-            }
-
-            fn create_default_index(&self) -> Option<Box<dyn $crate::rules::infrastructure::ecs::AnyIndex>> {
-                None
-            }
+    ($name:ident: $type:ty) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: $crate::rules::infrastructure::ecs::Attribute<$type> = $crate::rules::infrastructure::ecs::Attribute::new(stringify!($name));
         }
     };
 
-    ($access:vis $name:ident: $type:ty, indexed by $index:ty) => {
-        $access struct $name;
-
-        impl $crate::rules::infrastructure::ecs::AnyAttribute for $name {
-            fn get_name(&self) -> &'static str {
-                stringify!($name)
-            }
-
-            fn get_value_type_id(&self) -> std::any::TypeId {
-                std::any::TypeId::of::<$type>()
-            }
+    (flag $name:ident) => {
+        lazy_static::lazy_static! {
+            pub static ref $name: $crate::rules::infrastructure::ecs::FlagAttribute = $crate::rules::infrastructure::ecs::FlagAttribute::new(stringify!($name));
         }
-
-        impl $crate::rules::infrastructure::ecs::Attribute<$type> for $name {
-            fn as_any_attribute(&self) -> &dyn $crate::rules::infrastructure::ecs::AnyAttribute {
-                self
-            }
-
-            fn create_default_index(&self) -> Option<Box<dyn $crate::rules::infrastructure::ecs::AnyIndex>> {
-                let index: Box<$index> = Box::new(Default::default());
-                Some(index)
-            }
-        }
-
-        impl $crate::rules::infrastructure::ecs::IndexedBy<$type, $index> for $name {}
     };
 }
 
 // A basic attribute for writing unit tests
 #[cfg(test)]
-attribute!(pub DummyAttribute: u32);
+attribute!(DummyAttribute: u32);

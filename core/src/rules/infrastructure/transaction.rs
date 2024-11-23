@@ -11,7 +11,7 @@ pub trait Modification {
 /// Modify an attribute on the entity referenced by the handle
 pub struct AttributeModification<T: AttributeValue> {
     handle: Handle,
-    attribute: &'static dyn Attribute<T>,
+    attribute: &'static Attribute<T>,
     new_value: T,
 }
 
@@ -19,7 +19,7 @@ impl<T: AttributeValue + Clone> AttributeModification<T> {
     #[inline]
     pub fn new(
         handle: Handle,
-        attribute: &'static dyn Attribute<T>,
+        attribute: &'static Attribute<T>,
         new_value: T,
     ) -> AttributeModification<T> {
         AttributeModification {
@@ -39,14 +39,14 @@ impl<T: AttributeValue + Clone> Modification for AttributeModification<T> {
 /// Remove an attribute from the entity
 pub struct UnsetAttributeModification<T: AttributeValue> {
     handle: Handle,
-    attribute: &'static dyn Attribute<T>,
+    attribute: &'static Attribute<T>,
 }
 
 impl<T: AttributeValue> UnsetAttributeModification<T> {
     #[inline]
     pub fn new(
         handle: Handle,
-        attribute: &'static dyn Attribute<T>,
+        attribute: &'static Attribute<T>,
     ) -> UnsetAttributeModification<T> {
         UnsetAttributeModification { handle, attribute }
     }

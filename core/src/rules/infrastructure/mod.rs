@@ -4,6 +4,5 @@ mod error;
 mod utilities;
 pub mod ecs;
 pub mod transaction;
-pub mod indicies;
 
 pub use error::BasicError;

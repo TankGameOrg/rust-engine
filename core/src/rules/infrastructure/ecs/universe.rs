@@ -1,19 +1,17 @@
-use std::{collections::HashMap, error::Error};
+use std::{any, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
 use crate::basic_error;
 
 use super::{
-    attribute::{AnyAttribute, Attribute, AttributeValue, IndexedBy},
-    entity::Entity,
-    index::{AnyIndex, Handle, Index},
+    attribute::{AnyAttribute, Attribute, AttributeId, AttributeValue, FlagAttribute}, signature::{EntitySignature, Signature}, store::{AttributeStore, GenericAttributeStore, Handle, HandleIterator}
 };
 
 /// A collection of entities that can be queried by their attributes
 pub struct Universe {
-    entities: HashMap<Handle, Entity>,
-    indicies: HashMap<&'static dyn AnyAttribute, Box<dyn AnyIndex>>,
+    entities: HashMap<Handle, EntitySignature>,
+    attribute_stores: HashMap<AttributeId, Box<dyn AttributeStore>>,
 }
 
 impl Default for Universe {
@@ -27,14 +25,14 @@ impl Universe {
     pub fn new() -> Universe {
         Universe {
             entities: HashMap::new(),
-            indicies: HashMap::new(),
+            attribute_stores: HashMap::new(),
         }
     }
 
     /// Add an entity and create a new handle
     pub fn add_entity(&mut self) -> Handle {
         let handle = Handle::new();
-        self.entities.insert(handle, Entity::new());
+        self.entities.insert(handle, EntitySignature::default());
         handle
     }
 
@@ -50,8 +48,18 @@ impl Universe {
             ));
         }
 
-        self.entities.insert(handle, Entity::new());
+        self.entities.insert(handle, EntitySignature::default());
         Ok(())
+    }
+
+    fn get_signature(&self, handle: &Handle) -> Result<&EntitySignature, Box<dyn Error>> {
+        self.entities.get(&handle)
+            .ok_or(basic_error!("There is no entity for handle {:?}", handle))
+    }
+
+    fn get_signature_mut(&mut self, handle: &Handle) -> Result<&mut EntitySignature, Box<dyn Error>> {
+        self.entities.get_mut(&handle)
+            .ok_or(basic_error!("There is no entity for handle {:?}", handle))
     }
 
     /// Get an attribute's value from an entity
@@ -61,33 +69,63 @@ impl Universe {
     pub fn get_attribute<T: AttributeValue>(
         &self,
         handle: Handle,
-        key: &dyn Attribute<T>,
+        key: &Attribute<T>,
     ) -> Result<&T, Box<dyn Error>> {
-        self.get_entity(handle)?.get(key)
+        let attribute_id = key.get_attribute_id();
+        let signature = self.get_signature(&handle)?;
+        if !signature.has(attribute_id) {
+            return Err(basic_error!("Entity {:?} does not have the attribute {} (signature = {:?})", handle, attribute_id, signature));
+        }
+
+        let store = self.attribute_stores.get(&attribute_id).unwrap();
+        let store_type_name = store.get_attribute_type_name();
+
+        let store: &GenericAttributeStore<T> = store.as_ref()
+            .downcast_ref()
+            .ok_or(basic_error!("Attribute store for {} should be of type {} but was {}", key.get_name(), any::type_name::<T>(), store_type_name))?;
+
+        Ok(store.get_attribute(handle))
     }
 
     /// Set an attribute's value for an entity
     ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn set_attribute<T: AttributeValue + Clone>(
+    pub fn set_attribute<T: AttributeValue>(
         &mut self,
         handle: Handle,
-        key: &'static dyn Attribute<T>,
+        key: &Attribute<T>,
         value: T,
     ) -> Result<(), Box<dyn Error>> {
-        let old_value = self.get_entity(handle)?.get(key).ok().cloned();
+        let attribute_id = key.get_attribute_id();
+        self.get_signature_mut(&handle)?.add(attribute_id);
 
-        if let Some(index) = self.get_index_mut(key) {
-            if let Some(old_value) = old_value {
-                index.update_attribute_dynamic(handle, &old_value, &value)?;
-            }
-            else {
-                index.add_attribute_dynamic(handle, &value)?;
-            }
+        if !self.attribute_stores.contains_key(&attribute_id) {
+            self.attribute_stores.insert(attribute_id, Box::new(GenericAttributeStore::<T>::default()));
         }
 
-        self.get_entity_mut(handle)?.set(key, value);
+        let store = self.attribute_stores.get_mut(&attribute_id).unwrap();
+        let store_type_name = store.get_attribute_type_name();
+
+        let store: &mut GenericAttributeStore<T> = store.as_mut()
+            .downcast_mut()
+            .ok_or(basic_error!("Attribute store for {} should be of type {} but was {}", key.get_name(), any::type_name::<T>(), store_type_name))?;
+
+        store.set_attribute(handle, value);
+        Ok(())
+    }
+
+    /// Set a flag attribute
+    /// 
+    /// If the entity doesn't exist we return an error
+    #[inline]
+    pub fn set_flag_attribute(
+        &mut self,
+        handle: Handle,
+        key: &FlagAttribute
+    ) -> Result<(), Box<dyn Error>> {
+        let attribute_id = key.get_attribute_id();
+        self.get_signature_mut(&handle)?.add(attribute_id);
         Ok(())
     }
 
@@ -95,18 +133,27 @@ impl Universe {
     ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    pub fn remove_attribute<T: AttributeValue + Clone>(
+    pub fn remove_attribute(
         &mut self,
         handle: Handle,
-        key: &'static dyn Attribute<T>,
+        key: &dyn AnyAttribute,
     ) -> Result<(), Box<dyn Error>> {
-        let old_value = self.get_entity(handle)?.get(key)?.clone();
+        let attribute_id = key.get_attribute_id();
+        let signature = self.get_signature_mut(&handle)?;
 
-        if let Some(index) = self.indicies.get_mut(key.as_any_attribute()) {
-            index.remove_attribute_dynamic(handle, &old_value)?;
+        if !signature.has(attribute_id) {
+            return Ok(());
+        }
+        
+        signature.remove(attribute_id);
+
+        if key.is_flag() {
+            return Ok(());
         }
 
-        self.get_entity_mut(handle)?.remove(key.as_any_attribute());
+        let store = self.attribute_stores.get_mut(&attribute_id).unwrap();
+        store.remove_attribute(handle);
+
         Ok(())
     }
 
@@ -119,60 +166,35 @@ impl Universe {
         handle: Handle,
         key: &dyn AnyAttribute,
     ) -> Result<bool, Box<dyn Error>> {
-        Ok(self.get_entity(handle)?.has(key))
+        Ok(self.get_signature(&handle)?.has(key.get_attribute_id()))
     }
 
+    // TODO: Implement me
     /// Iterate the attributes on an entity
-    #[inline]
-    pub fn iter_attributes(
-        &self,
-        handle: Handle,
-    ) -> Result<impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)>, Box<dyn Error>>
-    {
-        Ok(self.get_entity(handle)?.iter())
-    }
-
-    /// Get the Entity pointed to by a handle
-    ///
-    /// If the entity does not exist we return an error
-    #[inline]
-    fn get_entity(&self, handle: Handle) -> Result<&Entity, Box<dyn Error>> {
-        self.entities
-            .get(&handle)
-            .ok_or(basic_error!(
-                "Entity for {:?} does not exist",
-                handle
-            ))
-    }
-
-    /// Get a mutable reference to the Entity pointed to by a haandle
-    ///
-    /// If the entity does not exist we return an error
-    #[inline]
-    fn get_entity_mut(&mut self, handle: Handle) -> Result<&mut Entity, Box<dyn Error>> {
-        self.entities
-            .get_mut(&handle)
-            .ok_or(basic_error!(
-                "Entity for {:?} does not exist",
-                handle
-            ))
-    }
+    // #[inline]
+    // pub fn iter_attributes(
+    //     &self,
+    //     handle: Handle,
+    // ) -> Result<impl Iterator<Item = (&dyn AnyAttribute, &dyn AttributeValue)>, Box<dyn Error>>
+    // {
+    //     Err(basic_error!("TODO"))
+    // }
 
     /// Remove a entity from a universe
     ///
     /// If the handle does not exist return an error
     pub fn remove_entity(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
-        let optional_entity = self.entities.remove(&handle);
+        let optional_entity_sig = self.entities.remove(&handle);
 
-        match optional_entity {
+        match optional_entity_sig {
             None => Err(basic_error!(
                 "The handle {:?} does not reference a valid entity",
                 handle
             )),
-            Some(entity) => {
-                for (attribute, old_value) in &entity {
-                    if let Some(index) = self.indicies.get_mut(attribute) {
-                        index.remove_attribute_dynamic(handle, old_value)?;
+            Some(entity_sig) => {
+                for attribute_id in entity_sig.iter_attribute_ids() {
+                    if let Some(store) = self.attribute_stores.get_mut(&attribute_id) {
+                        store.remove_attribute(handle);
                     }
                 }
 
@@ -181,80 +203,28 @@ impl Universe {
         }
     }
 
+    pub fn is_match(&self, handle: Handle, signature: Signature) -> bool {
+        signature.is_match(self.entities.get(&handle).unwrap())
+    }
+
     /// Filter all of the entities in the universe and return an iterator to the ones that match
     pub fn gather<'iter>(
         &'iter self,
-        predicate: &'iter dyn Fn(Handle) -> bool,
+        signature: Signature,
     ) -> impl Iterator<Item = Handle> + 'iter {
-        self.entities
-            .keys()
-            .filter(|handle| predicate(**handle))
-            .copied()
-    }
+        let mut handle_iter = HandleIterator::new(self.entities.keys());
+        let mut length = self.entities.len();
 
-    /// Get an index which can be used to find one or more entities based on a specific attribute
-    pub fn get_index<ValueType, IndexType>(
-        &self,
-        attribute: &'static dyn IndexedBy<ValueType, IndexType>,
-    ) -> &IndexType
-    where
-        ValueType: AttributeValue,
-        IndexType: Index<AttributeValueType = ValueType> + 'static,
-    {
-        match self.indicies.get(attribute.as_any_attribute()) {
-            Some(index) => match index.as_ref().downcast_ref::<IndexType>() {
-                Some(index) => index,
-                None => panic!(
-                    "Expected index for {} to be {} but got type {:?}",
-                    attribute.get_name(),
-                    stringify!(IndexType),
-                    index.as_ref().type_id()
-                ),
-            },
-            None => panic!(
-                "Could not find an index for {}",
-                attribute.get_name()
-            ),
-        }
-    }
-
-    /// Add an index to optimize queries for entities with a specific attribute
-    ///
-    /// All indicies must be added before any entities are and each attribute can only have one index
-    #[inline]
-    pub fn add_index<
-        ValueType: AttributeValue,
-        IndexType: Index<AttributeValueType = ValueType>,
-    >(
-        &mut self,
-        attribute: &'static dyn IndexedBy<ValueType, IndexType>,
-        index: IndexType,
-    ) {
-        assert!(
-            self.entities.is_empty(),
-            "Index for {:?} was added after entities had been added",
-            attribute
-        );
-        assert!(
-            !self.indicies.contains_key(attribute.as_any_attribute()),
-            "An index has already been registered for {:?}",
-            attribute
-        );
-        self.indicies
-            .insert(attribute.as_any_attribute(), Box::new(index));
-    }
-
-    /// Get a mutable reference to this attribute's index if this attribute has one
-    /// 
-    /// If the attribute has an index but we don't have an instance of it yet it will be created automatically
-    fn get_index_mut<T>(&mut self, attribute: &'static dyn Attribute<T>) -> Option<&mut dyn AnyIndex> where T: AttributeValue {
-        if !self.indicies.contains_key(attribute.as_any_attribute()) {
-            if let Some(new_index) = attribute.create_default_index() {
-                self.indicies.insert(attribute.as_any_attribute(), new_index);   
+        for attribute_id in signature.iter_attribute_ids() {
+            if let Some(store) = self.attribute_stores.get(&attribute_id) {
+                if store.len() < length {
+                    length = store.len();
+                    handle_iter = store.iter_handles();
+                }
             }
         }
 
-        self.indicies.get_mut(attribute.as_any_attribute()).map(|index| index.as_mut())
+        handle_iter.filter(move |handle| self.is_match(*handle, signature))
     }
 }
 
@@ -341,9 +311,7 @@ macro_rules! modify_entity {
 
 #[cfg(test)]
 mod test {
-    use std::error::Error;
-
-    use crate::{attribute, rules::infrastructure::ecs::attribute::DummyAttribute};
+    use crate::{attribute, rules::infrastructure::ecs::attribute::DummyAttribute, signature};
 
     use super::*;
 
@@ -365,6 +333,8 @@ mod test {
         assert!(error.is_err());
     }
 
+    attribute!(flag DummyAttribute2);
+
     #[test]
     fn can_gather_entities() {
         let mut universe = Universe::new();
@@ -378,16 +348,13 @@ mod test {
             .set_attribute(second_handle, &DummyAttribute, 1)
             .unwrap();
 
+            universe.set_flag_attribute(second_handle, &DummyAttribute2).unwrap();
+
         let _ = universe.add_entity();
 
         // Gather one of the entities
         let one: Vec<Handle> = universe
-            .gather(&|handle| {
-                *universe
-                    .get_attribute(handle, &DummyAttribute)
-                    .unwrap_or(&5)
-                    < 2
-            })
+            .gather(signature!(DummyAttribute2))
             .collect();
 
         assert_eq!(one.len(), 1);
@@ -395,143 +362,12 @@ mod test {
 
         // Gather both of the ones with attributes
         let two: Vec<Handle> = universe
-            .gather(&|handle| {
-                universe
-                    .has_attribute(handle, &DummyAttribute)
-                    .unwrap_or(false)
-            })
+            .gather(signature!(DummyAttribute))
             .collect();
 
         println!("{:?} - {:?}, {:?}", two, first_handle, second_handle);
         assert_eq!(two.len(), 2);
         assert!(two.contains(&first_handle));
         assert!(two.contains(&second_handle));
-    }
-
-    #[derive(Default)]
-    struct DummyIndex;
-
-    impl Index for DummyIndex {
-        type AttributeValueType = u32;
-        fn remove_attribute(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
-        fn add_attribute(
-            &mut self,
-            _handle: Handle,
-            _new_value: &Self::AttributeValueType,
-        ) -> Result<(), Box<dyn Error>> {
-            Ok(())
-        }
-    }
-
-    struct TestIndex {
-        handle: Option<Handle>,
-    }
-
-    impl TestIndex {
-        fn get(&self) -> Result<Handle, Box<dyn Error>> {
-            match self.handle {
-                None => Err(basic_error!(
-                    "No handle stored yet",
-                )),
-                Some(handle) => Ok(handle),
-            }
-        }
-    }
-
-    impl Default for TestIndex {
-        fn default() -> Self {
-            TestIndex { handle: None }
-        }
-    }
-
-    impl Index for TestIndex {
-        type AttributeValueType = u32;
-
-        fn add_attribute(
-            &mut self,
-            handle: Handle,
-            _new_value: &u32,
-        ) -> Result<(), Box<dyn Error>> {
-            self.handle = Some(handle);
-            Ok(())
-        }
-
-        fn remove_attribute(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
-            self.handle = None;
-            Ok(())
-        }
-    }
-
-    attribute!(DummyAttribute2: u32, indexed by TestIndex);
-
-    #[test]
-    fn index_test() {
-        let mut universe = Universe::new();
-
-        let handle = universe.add_entity();
-        universe.set_attribute(handle, &DummyAttribute, 2).unwrap();
-        universe.set_attribute(handle, &DummyAttribute2, 6).unwrap();
-
-        let _ = universe.add_entity();
-
-        let result = universe.get_index(&DummyAttribute2).get().unwrap();
-        assert_eq!(result, handle);
-
-        universe.remove_entity(handle).unwrap();
-    }
-
-    #[derive(Default)]
-    struct FailingIndex;
-
-    static mut FAILING_INDEX_FAILS: bool = false;
-
-    impl FailingIndex {
-        fn return_result(&self) -> Result<(), Box<dyn Error>> {
-            if unsafe { FAILING_INDEX_FAILS } {
-                Err(basic_error!("Tripped error"))
-            } else {
-                Ok(())
-            }
-        }
-    }
-
-    impl Index for FailingIndex {
-        type AttributeValueType = u32;
-
-        fn remove_attribute(&mut self, _handle: Handle, _old_value: &u32) -> Result<(), Box<dyn Error>> {
-            self.return_result()
-        }
-
-        fn add_attribute(
-            &mut self,
-            _handle: Handle,
-            _new_value: &Self::AttributeValueType,
-        ) -> Result<(), Box<dyn Error>> {
-            self.return_result()
-        }
-    }
-
-    attribute!(FailingAttribute: u32, indexed by FailingIndex);
-
-    #[test]
-    fn failing_index() {
-        let mut universe = Universe::new();
-        universe.add_index(&FailingAttribute, FailingIndex {});
-
-        let handle = universe.add_entity();
-        let handle2 = universe.add_entity();
-        universe
-            .set_attribute(handle2, &FailingAttribute, 1)
-            .unwrap();
-
-        universe.set_attribute(handle, &FailingAttribute, 2).unwrap();
-
-        unsafe {
-            FAILING_INDEX_FAILS = true;
-        }
-
-        assert!(universe.remove_entity(handle).is_err());
     }
 }
