@@ -75,6 +75,6 @@ mod store;
 mod universe;
 
 pub use signature::Signature;
-pub use attribute::{AnyAttribute, Attribute, AttributeValue, FlagAttribute};
+pub use attribute::Attribute;
 pub use store::Handle;
 pub use universe::Universe;

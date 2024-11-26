@@ -2,7 +2,7 @@ use std::{any, collections::HashMap, sync::atomic::{AtomicUsize, Ordering}};
 
 use as_any::AsAny;
 
-use super::AttributeValue;
+use super::Attribute;
 
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
@@ -11,7 +11,7 @@ pub struct Handle(usize);
 
 static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0);
 
-impl AttributeValue for Handle {}
+impl Attribute for Handle {}
 
 impl Handle {
     #[inline]
@@ -54,14 +54,16 @@ pub trait AttributeStore: AsAny + std::fmt::Debug {
     fn iter_handles(&self) -> HandleIterator;
 
     fn remove_attribute(&mut self, handle: Handle);
+
+    fn get_attribute_generic(&self, handle: Handle) -> &dyn Attribute;
 }
 
 #[derive(Debug)]
-pub struct GenericAttributeStore<T: AttributeValue> {
+pub struct GenericAttributeStore<T: Attribute> {
     values: HashMap<Handle, T>,
 }
 
-impl<T: AttributeValue> Default for GenericAttributeStore<T> {
+impl<T: Attribute> Default for GenericAttributeStore<T> {
     fn default() -> Self {
         GenericAttributeStore {
             values: HashMap::new(),
@@ -69,7 +71,7 @@ impl<T: AttributeValue> Default for GenericAttributeStore<T> {
     }
 }
 
-impl<T: AttributeValue> GenericAttributeStore<T> {
+impl<T: Attribute> GenericAttributeStore<T> {
     pub fn get_attribute(&self, handle: Handle) -> &T {
         self.values.get(&handle).unwrap()
     }
@@ -79,7 +81,7 @@ impl<T: AttributeValue> GenericAttributeStore<T> {
     }
 }
 
-impl<T: AttributeValue> AttributeStore for GenericAttributeStore<T> {
+impl<T: Attribute> AttributeStore for GenericAttributeStore<T> {
     fn get_attribute_type_name(&self) -> &'static str {
         any::type_name::<T>()
     }
@@ -90,6 +92,10 @@ impl<T: AttributeValue> AttributeStore for GenericAttributeStore<T> {
 
     fn iter_handles(&self) -> HandleIterator {
         HandleIterator::new(self.values.keys())
+    }
+
+    fn get_attribute_generic(&self, handle: Handle) -> &dyn Attribute {
+        self.get_attribute(handle)
     }
 
     fn remove_attribute(&mut self, handle: Handle) {
