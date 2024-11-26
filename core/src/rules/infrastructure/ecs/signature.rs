@@ -4,7 +4,6 @@ use super::{attribute::AttributeId, AnyAttribute};
 type SignatureBitField = u64;
 
 /// A list of attributes that a given entity has
-#[derive(Debug)]
 pub struct EntitySignature {
     bits: SignatureBitField,
 }
@@ -39,9 +38,15 @@ impl EntitySignature {
     }
 }
 
+impl std::fmt::Debug for EntitySignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("<EntitySignature {:#b}>", self.bits))
+    }
+}
+
 
 /// A list of attributes that should or shouldn't be present on a type of entity
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Signature {
     mask: SignatureBitField,
     expected_value: SignatureBitField,
@@ -95,6 +100,12 @@ impl Signature {
 
     pub(super) fn iter_attribute_ids(&self) -> AttributeIdIter {
         AttributeIdIter::new(self.expected_value)
+    }
+}
+
+impl std::fmt::Debug for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("<Signature mask = {:#b}, expected = {:#b}>", self.mask, self.expected_value))
     }
 }
 

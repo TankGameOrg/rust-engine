@@ -5,13 +5,14 @@ use as_any::Downcast;
 use crate::basic_error;
 
 use super::{
-    attribute::{AnyAttribute, Attribute, AttributeId, AttributeValue, FlagAttribute}, signature::{EntitySignature, Signature}, store::{AttributeStore, GenericAttributeStore, Handle, HandleIterator}
+    attribute::{AnyAttribute, Attribute, AttributeValue, FlagAttribute, MAX_NUM_ATTRIBUTES}, signature::{EntitySignature, Signature}, store::{AttributeStore, GenericAttributeStore, Handle, HandleIterator}
 };
 
 /// A collection of entities that can be queried by their attributes
+#[derive(Debug)]
 pub struct Universe {
     entities: HashMap<Handle, EntitySignature>,
-    attribute_stores: HashMap<AttributeId, Box<dyn AttributeStore>>,
+    stores: [Option<Box<dyn AttributeStore>>; MAX_NUM_ATTRIBUTES],
 }
 
 impl Default for Universe {
@@ -25,7 +26,7 @@ impl Universe {
     pub fn new() -> Universe {
         Universe {
             entities: HashMap::new(),
-            attribute_stores: HashMap::new(),
+            stores: [const { None }; MAX_NUM_ATTRIBUTES],
         }
     }
 
@@ -77,7 +78,7 @@ impl Universe {
             return Err(basic_error!("Entity {:?} does not have the attribute {} (signature = {:?})", handle, attribute_id, signature));
         }
 
-        let store = self.attribute_stores.get(&attribute_id).unwrap();
+        let store = self.stores[attribute_id].as_ref().unwrap();
         let store_type_name = store.get_attribute_type_name();
 
         let store: &GenericAttributeStore<T> = store.as_ref()
@@ -100,11 +101,11 @@ impl Universe {
         let attribute_id = key.get_attribute_id();
         self.get_signature_mut(&handle)?.add(attribute_id);
 
-        if !self.attribute_stores.contains_key(&attribute_id) {
-            self.attribute_stores.insert(attribute_id, Box::new(GenericAttributeStore::<T>::default()));
+        if let None = self.stores[attribute_id] {
+            self.stores[attribute_id] = Some(Box::new(GenericAttributeStore::<T>::default()));
         }
 
-        let store = self.attribute_stores.get_mut(&attribute_id).unwrap();
+        let store = self.stores[attribute_id].as_mut().unwrap();
         let store_type_name = store.get_attribute_type_name();
 
         let store: &mut GenericAttributeStore<T> = store.as_mut()
@@ -151,8 +152,8 @@ impl Universe {
             return Ok(());
         }
 
-        let store = self.attribute_stores.get_mut(&attribute_id).unwrap();
-        store.remove_attribute(handle);
+        let attribute_data = self.stores[attribute_id].as_mut().unwrap();
+        attribute_data.remove_attribute(handle);
 
         Ok(())
     }
@@ -193,7 +194,7 @@ impl Universe {
             )),
             Some(entity_sig) => {
                 for attribute_id in entity_sig.iter_attribute_ids() {
-                    if let Some(store) = self.attribute_stores.get_mut(&attribute_id) {
+                    if let Some(store) = self.stores[attribute_id].as_mut() {
                         store.remove_attribute(handle);
                     }
                 }
@@ -216,7 +217,7 @@ impl Universe {
         let mut length = self.entities.len();
 
         for attribute_id in signature.iter_attribute_ids() {
-            if let Some(store) = self.attribute_stores.get(&attribute_id) {
+            if let Some(store) = self.stores[attribute_id].as_ref() {
                 if store.len() < length {
                     length = store.len();
                     handle_iter = store.iter_handles();
@@ -227,14 +228,6 @@ impl Universe {
         handle_iter.filter(move |handle| self.is_match(*handle, signature))
     }
 }
-
-impl std::fmt::Debug for Universe {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Universe ")?;
-        self.entities.fmt(f)
-    }
-}
-
 
 /// Create an entity with the specified attributes
 ///
@@ -365,7 +358,6 @@ mod test {
             .gather(signature!(DummyAttribute))
             .collect();
 
-        println!("{:?} - {:?}, {:?}", two, first_handle, second_handle);
         assert_eq!(two.len(), 2);
         assert!(two.contains(&first_handle));
         assert!(two.contains(&second_handle));

@@ -3,12 +3,12 @@ use std::{any::TypeId, hash::Hash, marker::PhantomData};
 use as_any::AsAny;
 
 /// The ID type used for an attribute
-pub type AttributeId = u8;
+pub type AttributeId = usize;
 
 /// The highest attribute value allowed
 /// 
 /// This must be 1 less than the u* for the signature::SignatureBitField.  So if signature::SignatureBitField is a u64 MAX_ATTRIBUTE_ID should be 63
-static MAX_ATTRIBUTE_ID: AttributeId = 63;
+pub const MAX_NUM_ATTRIBUTES: AttributeId = 63;
 
 static mut NEXT_ATTRIBUTE_ID: AttributeId = 0;
 
@@ -16,7 +16,7 @@ static mut NEXT_ATTRIBUTE_ID: AttributeId = 0;
 fn assign_attribute_id() -> AttributeId {
     unsafe {
         let id = NEXT_ATTRIBUTE_ID;
-        assert!(id <= MAX_ATTRIBUTE_ID, "Too many attribute IDs have been assigned");
+        assert!(id < MAX_NUM_ATTRIBUTES, "Too many attribute IDs have been assigned");
         NEXT_ATTRIBUTE_ID += 1;
         id
     }

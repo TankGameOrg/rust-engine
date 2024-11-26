@@ -46,7 +46,7 @@ impl<'iter> Iterator for HandleIterator<'iter> {
     }
 }
 
-pub trait AttributeStore: AsAny {
+pub trait AttributeStore: AsAny + std::fmt::Debug {
     fn get_attribute_type_name(&self) -> &'static str;
 
     fn len(&self) -> usize;
@@ -56,6 +56,7 @@ pub trait AttributeStore: AsAny {
     fn remove_attribute(&mut self, handle: Handle);
 }
 
+#[derive(Debug)]
 pub struct GenericAttributeStore<T: AttributeValue> {
     values: HashMap<Handle, T>,
 }
