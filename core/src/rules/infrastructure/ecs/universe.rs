@@ -17,32 +17,11 @@ pub struct Universe {
 }
 
 impl Universe {
-    #[inline]
-    pub fn new() -> Universe {
-        Default::default()
-    }
-
     /// Add an entity and create a new handle
     pub fn add_entity(&mut self) -> Handle {
         let handle = Handle::new();
         self.entities.insert(handle, EntitySignature::default());
         handle
-    }
-
-    /// Add an Entity with an existing handle
-    ///
-    /// Most users should call add_entity() and use the handle it gives you
-    pub(in crate::rules::infrastructure) fn add_entity_with_handle(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
-        if self.entities.contains_key(&handle) {
-            let current = self.entities.get(&handle).unwrap();
-            return Err(basic_error!(
-                "The handle {:?} already exists in this universe (current = {:?})",
-                handle, current
-            ));
-        }
-
-        self.entities.insert(handle, EntitySignature::default());
-        Ok(())
     }
 
     fn get_signature(&self, handle: &Handle) -> Result<&EntitySignature, Box<dyn Error>> {
@@ -304,20 +283,11 @@ mod test {
 
     #[test]
     fn can_modify_and_retrieve_entities() {
-        let mut universe = Universe::new();
+        let mut universe = Universe::default();
         let handle = universe.add_entity();
         universe.set_attribute(handle, DummyAttribute(2)).unwrap();
 
         assert_eq!(universe.get_attribute::<DummyAttribute>(handle).unwrap().0, 2);
-    }
-
-    #[test]
-    fn can_add_a_entity_with_an_existing_handle() {
-        let mut universe = Universe::new();
-        let handle = universe.add_entity();
-
-        let error = universe.add_entity_with_handle(handle);
-        assert!(error.is_err());
     }
 
     #[derive(Debug)]
@@ -326,7 +296,7 @@ mod test {
 
     #[test]
     fn can_gather_entities() {
-        let mut universe = Universe::new();
+        let mut universe = Universe::default();
         let first_handle = universe.add_entity();
         universe
             .set_attribute(first_handle, DummyAttribute(2))

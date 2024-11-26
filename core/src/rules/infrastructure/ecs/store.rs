@@ -14,15 +14,8 @@ static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0);
 impl Attribute for Handle {}
 
 impl Handle {
-    #[inline]
-    pub fn new() -> Handle {
+    pub(super) fn new() -> Handle {
         Handle(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
-impl Default for Handle {
-    fn default() -> Self {
-        Handle::new()
     }
 }
 

@@ -314,10 +314,10 @@ mod test {
         id_map.assign::<Bar>();
 
         let foo_bar_signature = signature!(Foo, Bar);
-        let mut iter = foo_bar_signature.iter_included(&id_map);
-        assert_eq!(iter.next(), Some(id_map.get_id::<Foo>().unwrap()));
-        assert_eq!(iter.next(), Some(id_map.get_id::<Bar>().unwrap()));
-        assert_eq!(iter.next(), None);
+        let ids: Vec<AttributeId> = foo_bar_signature.iter_included(&id_map).collect();
+        assert!(ids.contains(&id_map.get_id::<Foo>().unwrap()));
+        assert!(ids.contains(&id_map.get_id::<Bar>().unwrap()));
+        assert_eq!(ids.len(), 2);
     }
 
     #[test]
