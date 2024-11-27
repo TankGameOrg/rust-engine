@@ -8,7 +8,7 @@ use super::{
     attribute::Attribute, signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature}, store::{AttributeStore, GenericAttributeStore, Handle, HandleIterator}
 };
 
-/// A collection of entities that can be queried by their attributes
+/// A collection of entities where each entity is made up one or more Attributes
 #[derive(Debug, Default)]
 pub struct Universe {
     id_map: AttributeIdMap,
@@ -17,7 +17,28 @@ pub struct Universe {
 }
 
 impl Universe {
-    /// Add an entity and create a new handle
+    /// Add an entity to the universe
+    /// ```
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute;
+    /// # impl Attribute for DummyAttribute {}
+    /// 
+    /// // Get a Handle to the new entity
+    /// let handle = universe.add_entity()
+    ///     .set(DummyAttribute)
+    ///     .as_handle();
+    /// 
+    /// // Get a reference to the new entity
+    /// let entity = universe.add_entity().as_entity();
+    /// 
+    /// // Get a mutable reference to the new entity
+    /// let mut entity = universe.add_entity()
+    ///     .set(DummyAttribute)
+    ///     .as_entity_mut();
+    /// ```
     pub fn add_entity(&mut self) -> EntityBuilder {
         let handle = Handle::new();
         self.entities.insert(handle, EntitySignature::default());
@@ -309,6 +330,23 @@ impl<'universe> EntityRef<'universe> {
     }
 
     /// Get an attribute's value from this entity
+    /// ```
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute(u32);
+    /// # impl Attribute for DummyAttribute {}
+    /// #
+    /// # let handle = universe.add_entity()
+    /// #    .set(DummyAttribute(1))
+    /// #    .as_handle();
+    /// let entity = universe.get_entity(handle)?;
+    /// 
+    /// let DummyAttribute(_value) = entity.get()?;
+    /// #
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[inline]
     pub fn get<T: Attribute>(
         &self
@@ -317,6 +355,23 @@ impl<'universe> EntityRef<'universe> {
     }
 
     /// Check if this entity has an attribute
+    /// ```
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute(u32);
+    /// # impl Attribute for DummyAttribute {}
+    /// #
+    /// # let handle = universe.add_entity()
+    /// #    .set(DummyAttribute(1))
+    /// #    .as_handle();
+    /// let entity = universe.get_entity(handle)?;
+    /// 
+    /// assert!(entity.has::<DummyAttribute>());
+    /// #
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[inline]
     pub fn has<T: Attribute>(
         &self
@@ -325,6 +380,25 @@ impl<'universe> EntityRef<'universe> {
     }
 
     /// Iterate the attributes on this entity
+    /// ```
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute(u32);
+    /// # impl Attribute for DummyAttribute {}
+    /// #
+    /// # let handle = universe.add_entity()
+    /// #    .set(DummyAttribute(1))
+    /// #    .as_handle();
+    /// let entity = universe.get_entity(handle)?;
+    /// 
+    /// for attribute in &entity {
+    ///     println!("Attribute: {:?}", attribute);
+    /// }
+    /// #
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[inline]
     pub fn iter(
         &self,
@@ -334,6 +408,24 @@ impl<'universe> EntityRef<'universe> {
     }
 
     /// Check if the this entity matches the signature given
+    /// ```
+    /// # use tank_game_core::signature;
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute(u32);
+    /// # impl Attribute for DummyAttribute {}
+    /// #
+    /// # let handle = universe.add_entity()
+    /// #    .set(DummyAttribute(1))
+    /// #    .as_handle();
+    /// let entity = universe.get_entity(handle)?;
+    /// 
+    /// assert!(entity.is_match(signature!(DummyAttribute)));
+    /// #
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[inline]
     pub fn is_match(&self, signature: Signature) -> bool {
         self.universe.is_match(self.handle, signature)
@@ -364,6 +456,8 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Get an attribute's value from this entity
+    /// 
+    /// Same as [`EntityRef::get`]
     #[inline]
     pub fn get<T: Attribute>(
         &self
@@ -372,6 +466,21 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Set an attribute's value for this entity
+    /// ```
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute(u32);
+    /// # impl Attribute for DummyAttribute {}
+    /// #
+    /// # let handle = universe.add_entity().as_handle();
+    /// let mut entity = universe.get_entity_mut(handle)?;
+    /// 
+    /// entity.set(DummyAttribute(3));
+    /// #
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[inline]
     pub fn set<T: Attribute>(
         &mut self,
@@ -381,6 +490,21 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Remove an attribute from this entity
+    /// ```
+    /// # use tank_game_core::rules::infrastructure::ecs::{Universe, Attribute};
+    /// let mut universe = Universe::default();
+    /// #
+    /// # #[derive(Debug)]
+    /// # struct DummyAttribute(u32);
+    /// # impl Attribute for DummyAttribute {}
+    /// #
+    /// # let handle = universe.add_entity().as_handle();
+    /// let mut entity = universe.get_entity_mut(handle)?;
+    /// 
+    /// entity.remove::<DummyAttribute>();
+    /// #
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[inline]
     pub fn remove<T: Attribute>(
         &mut self
@@ -389,6 +513,8 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Check if this entity has an attribute
+    /// 
+    /// Same as [`EntityRef::has`]
     #[inline]
     pub fn has<T: Attribute>(
         &self
@@ -397,6 +523,8 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Iterate the attributes on this entity
+    /// 
+    /// Same as [`EntityRef::iter`]
     #[inline]
     pub fn iter<'iter>(
         &'iter self,
@@ -407,6 +535,8 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Check if the this entity matches the signature given
+    /// 
+    /// Same as [`EntityRef::is_match`]
     #[inline]
     pub fn is_match(&self, signature: Signature) -> bool {
         self.universe.is_match(self.handle, signature)

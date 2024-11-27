@@ -3,68 +3,62 @@
 //! Here's an example of how to create a universe and add some basic entities to it
 //! ```
 //! # use std::error::Error;
+//! # use std::vec::Vec;
 //! # use tank_game_core::*;
 //! # use tank_game_core::rules::infrastructure::ecs::*;
-//! # use tank_game_core::rules::infrastructure::transaction::*;
 //! #
-//! attribute!(Health: u32);
+//! #[derive(Debug)]
+//! struct Health(u32);
+//! impl Attribute for Health {}
 //!
-//! fn damage_living(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
-//!     let mut transaction = Transaction::new();
-//!
-//!     let living = universe.gather(signature!(Health))
-//!         .filter(|handle| *universe.get_attribute(*handle, &Health).unwrap() > 0);
+//! fn damage_living(universe: &mut Universe) -> Result<(), Box<dyn Error>> {
+//!     let living: Vec<(Handle, u32)> = universe.gather(signature!(Health))
+//!         .filter(|entity| entity.get::<Health>().unwrap().0 > 0)
+//!         .map(|entity| (entity.get_handle(), entity.get::<Health>().unwrap().0))
+//!         .collect();
 //! 
-//!     for handle in living {
-//!         modify_entity_transaction!(&mut transaction, handle, {
-//!             Health = universe.get_attribute(handle, &Health)? - 1
-//!         });
+//!     for (handle, health) in living {
+//!         universe.get_entity_mut(handle)?.set(Health(health - 1));
 //!     }
 //!
-//!     Ok(transaction)
+//!     Ok(())
 //! }
 //!
-//! fn remove_dead(universe: &Universe) -> Result<Transaction, Box<dyn Error>> {
-//!     let mut transaction = Transaction::new();
-//!
-//!     let dead = universe.gather(signature!(Health))
-//!         .filter(|handle| *universe.get_attribute(*handle, &Health).unwrap_or(&1) == 0);
+//! fn remove_dead(universe: &mut Universe) -> Result<(), Box<dyn Error>> {
+//!     let dead: Vec<Handle> = universe.gather(signature!(Health))
+//!         .filter(|entity| entity.get::<Health>().unwrap().0 == 0)
+//!         .map(|entity| entity.get_handle())
+//!         .collect();
 //! 
 //!     for handle in dead {
-//!         transaction.add(RemoveEntityModification::new(handle));
+//!         universe.remove_entity(handle);
 //!     }
 //!
-//!     Ok(transaction)
+//!     Ok(())
 //! }
 //!
-//! let mut universe = Universe::new();
+//! let mut universe = Universe::default();
 //!
 //! // Let's add a few Entities to our universe
-//! let tank1_handle = create_entity!(&mut universe, {
-//!     Health = 2
-//! })?;
+//! let tank1_handle = universe.add_entity()
+//!     .set(Health(2))
+//!     .as_handle();
 //!
-//! let tank2_handle = create_entity!(&mut universe, {
-//!     Health = 1
-//! })?;
+//! let tank2_handle = universe.add_entity()
+//!     .set(Health(1))
+//!     .as_handle();
 //!
-//! let damage1_transactionaction = damage_living(&universe)?;
+//! damage_living(&mut universe)?;
 //!
-//! let tank1_health = *universe.get_attribute(tank1_handle, &Health)?;
-//! // Tank1 still has 2 heath because the transaction hasn't been applied
-//! assert_eq!(tank1_health, 2);
-//!
-//! damage1_transactionaction.apply(&mut universe)?;
-//!
-//! let tank1_health = *universe.get_attribute(tank1_handle, &Health)?;
-//! let tank2_health = *universe.get_attribute(tank2_handle, &Health)?;
+//! let tank1_health = universe.get_entity(tank1_handle)?.get::<Health>()?.0;
+//! let tank2_health = universe.get_entity(tank2_handle)?.get::<Health>()?.0;
 //! // Now that the transaction has been applied both tanks lose 1 heath
 //! assert_eq!(tank1_health, 1);
 //! assert_eq!(tank2_health, 0);
 //!
-//! remove_dead(&universe)?.apply(&mut universe)?;
+//! remove_dead(&mut universe)?;
 //!
-//! assert!(universe.get_attribute(tank2_handle, &Health).is_err());
+//! assert!(universe.get_entity(tank2_handle).is_err());
 //! #
 //! # Ok::<(), Box<dyn Error>>(())
 //! ```

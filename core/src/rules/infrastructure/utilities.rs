@@ -1,13 +1,16 @@
 /// Match and downcast a generic type to one of several base types
 ///
 /// ```
-/// # use tank_game_core::rules::infrastructure::ecs::{Handle, AttributeValue};
+/// # use tank_game_core::rules::infrastructure::ecs::Attribute;
 /// # use tank_game_core::match_type;
-/// let value: u32 = 3;
-/// let attribute_value: &dyn AttributeValue = &value;
+/// # #[derive(Debug)]
+/// struct DummyAttribute;
+/// # impl Attribute for DummyAttribute {}
+/// #
+/// let value = DummyAttribute;
+/// let attribute_value: &dyn Attribute = &value;
 /// match_type!(attribute_value, {
-///     value: u32 => assert_eq!(*value, 3),
-///     _unused: Handle => panic!("This branch won't be called")
+///     value: DummyAttribute => { /* This branch will be called */ }
 /// });
 /// ```
 #[macro_export]
