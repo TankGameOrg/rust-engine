@@ -1,19 +1,72 @@
-use std::{any, collections::HashMap, error::Error};
+use std::{any::{self, type_name, Any}, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
 use crate::basic_error;
 
 use super::{
-    attribute::Attribute, signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature}, store::{AttributeStore, GenericAttributeStore, Handle, HandleIterator}
+    attribute::Attribute, signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature}, store::{AttributeStore, DefaultAttributeStore, Handle, HandleIterator}
 };
+
+/// The internal, object safe interface for storing attributes without knowing the underlying implementation
+/// 
+/// This trait exists to allow the Universe to store a map of AttributeStores for a variety of attribute types
+/// without knowing the type of the underlying attribute store.  While allowing exposing a compile check type
+/// safe interface to our clients.
+trait GenericAttributeStore: std::fmt::Debug + 'static {
+    /// See [`AttributeStore::len`]
+    fn len(&self) -> usize;
+
+    /// See [`AttributeStore::iter_handles`]
+    fn iter_handles(&self) -> HandleIterator;
+
+    /// See [`AttributeStore::remove_attribute`]
+    fn remove_attribute(&mut self, handle: Handle);
+
+    /// See [`AttributeStore::get_attribute`]
+    fn get_attribute(&self, handle: Handle) -> &dyn Attribute;
+
+    /// See [`AttributeStore::set_attribute`]
+    fn set_attribute(&mut self, handle: Handle, value: Box<dyn Any>) -> Result<(), Box<dyn Error>>;
+}
+
+impl<T: AttributeStore> GenericAttributeStore for T {
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn iter_handles(&self) -> HandleIterator {
+        self.iter_handles()
+    }
+
+    fn remove_attribute(&mut self, handle: Handle) {
+        self.remove_attribute(handle);
+    }
+
+    fn get_attribute(&self, handle: Handle) -> &dyn Attribute {
+        self.get_attribute(handle)
+    }
+
+    fn set_attribute(&mut self, handle: Handle, value: Box<dyn Any>) -> Result<(), Box<dyn Error>> {
+        let value_name = value.as_ref().type_id();
+
+        match value.downcast::<T::StoredAttribute>() {
+            Err(_) => {
+                Err(basic_error!("Expected attribute of type {} but got {:?}", type_name::<T>(), value_name))
+            },
+            Ok(value) => {
+                self.set_attribute(handle, *value)
+            }
+        }
+    }
+}
 
 /// A collection of entities where each entity is made up one or more Attributes
 #[derive(Debug, Default)]
 pub struct Universe {
     id_map: AttributeIdMap,
     entities: HashMap<Handle, EntitySignature>,
-    stores: HashMap<AttributeId, Box<dyn AttributeStore>>,
+    stores: HashMap<AttributeId, Box<dyn GenericAttributeStore>>,
 }
 
 impl Universe {
@@ -75,15 +128,11 @@ impl Universe {
         }
 
         let attribute_id = attribute_id.unwrap();
-
         let store = self.stores.get(&attribute_id).unwrap();
-        let store_type_name = store.get_attribute_type_name();
 
-        let store: &GenericAttributeStore<T> = store.as_ref()
+        store.get_attribute(handle)
             .downcast_ref()
-            .ok_or(basic_error!("Attribute store for {} but was {}", any::type_name::<T>(), store_type_name))?;
-
-        Ok(store.get_attribute(handle))
+            .ok_or(basic_error!("Got the wrong type when reading {} from {:?}", any::type_name::<T>(), handle))
     }
 
     /// Set an attribute's value for an entity
@@ -98,18 +147,11 @@ impl Universe {
         self.get_signature_mut(&handle)?.add(attribute_id);
 
         if !self.stores.contains_key(&attribute_id) {
-            self.stores.insert(attribute_id, Box::new(GenericAttributeStore::<T>::default()));
+            self.stores.insert(attribute_id, Box::new(DefaultAttributeStore::<T>::default()));
         }
 
         let store = self.stores.get_mut(&attribute_id).unwrap();
-        let store_type_name = store.get_attribute_type_name();
-
-        let store: &mut GenericAttributeStore<T> = store.as_mut()
-            .downcast_mut()
-            .ok_or(basic_error!("Attribute store for {} but was {}", any::type_name::<T>(), store_type_name))?;
-
-        store.set_attribute(handle, value);
-        Ok(())
+        store.set_attribute(handle, Box::new(value))
     }
 
     /// Remove an attribute from an entity
@@ -261,6 +303,17 @@ impl Universe {
             handle,
         })
     }
+
+    /// Set the structure used to store a specific type of attribute
+    /// 
+    /// The store must be set before any attributes of its StoredAttribute type have been added to the Universe
+    #[inline]
+    pub fn set_attribute_store<S: AttributeStore>(&mut self, store: S) {
+        let attribute_id = self.id_map.get_or_assign_id::<S::StoredAttribute>();
+        assert_eq!(store.len(), 0);
+        assert!(!self.stores.contains_key(&attribute_id));
+        self.stores.insert(attribute_id, Box::new(store));
+    }
 }
 
 /// An iterator for the attributes in a entity
@@ -276,7 +329,7 @@ impl<'universe> Iterator for AttributeIter<'universe> {
     fn next(&mut self) -> Option<Self::Item> {
         let attribute_id = self.attribute_id_iter.next()?;
         let store = self.universe.stores.get(&attribute_id).unwrap();
-        Some(store.get_attribute_generic(self.handle))
+        Some(store.get_attribute(self.handle))
     }
 }
 

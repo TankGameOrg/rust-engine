@@ -1,6 +1,4 @@
-use std::{any, collections::HashMap, sync::atomic::{AtomicUsize, Ordering}};
-
-use as_any::AsAny;
+use std::{collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}};
 
 use super::Attribute;
 
@@ -19,6 +17,7 @@ impl Handle {
     }
 }
 
+/// A wrapper for any iterator that returns a Handle
 pub struct HandleIterator<'iter> {
     iter: Box<dyn Iterator<Item = Handle> + 'iter>,
 }
@@ -39,9 +38,8 @@ impl<'iter> Iterator for HandleIterator<'iter> {
     }
 }
 
-pub trait AttributeStore: AsAny + std::fmt::Debug {
-    /// Get a string representing the type of Attribute stored by this store
-    fn get_attribute_type_name(&self) -> &'static str;
+pub trait AttributeStore: std::fmt::Debug + 'static {
+    type StoredAttribute: Attribute;
 
     /// Get the number of attributes stored by this store
     fn len(&self) -> usize;
@@ -55,40 +53,27 @@ pub trait AttributeStore: AsAny + std::fmt::Debug {
     /// Get the attribute assosiated with this handle as a generic attribute
     /// 
     /// If the handle does not have an attribute assosiated with it it will panic
-    fn get_attribute_generic(&self, handle: Handle) -> &dyn Attribute;
+    fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute;
+
+    /// Set the attribute assosiated with this handle
+    fn set_attribute(&mut self, handle: Handle, value: Self::StoredAttribute) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Debug)]
-pub struct GenericAttributeStore<T: Attribute> {
+pub struct DefaultAttributeStore<T: Attribute> {
     values: HashMap<Handle, T>,
 }
 
-impl<T: Attribute> Default for GenericAttributeStore<T> {
+impl<T: Attribute> Default for DefaultAttributeStore<T> {
     fn default() -> Self {
-        GenericAttributeStore {
+        DefaultAttributeStore {
             values: HashMap::new(),
         }
     }
 }
 
-impl<T: Attribute> GenericAttributeStore<T> {
-    /// Get the attribute assosiated with this handle
-    /// 
-    /// If the handle does not have an attribute assosiated with it it will panic
-    pub fn get_attribute(&self, handle: Handle) -> &T {
-        self.values.get(&handle).unwrap()
-    }
-
-    /// Set the attribute assosiated with this handle
-    pub fn set_attribute(&mut self, handle: Handle, value: T) {
-        self.values.insert(handle, value);
-    }
-}
-
-impl<T: Attribute> AttributeStore for GenericAttributeStore<T> {
-    fn get_attribute_type_name(&self) -> &'static str {
-        any::type_name::<T>()
-    }
+impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
+    type StoredAttribute = T;
 
     fn len(&self) -> usize {
         self.values.len()
@@ -98,11 +83,16 @@ impl<T: Attribute> AttributeStore for GenericAttributeStore<T> {
         HandleIterator::new(self.values.keys())
     }
 
-    fn get_attribute_generic(&self, handle: Handle) -> &dyn Attribute {
-        self.get_attribute(handle)
+    fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute {
+        self.values.get(&handle).unwrap()
     }
 
     fn remove_attribute(&mut self, handle: Handle) {
         self.values.remove(& handle);
+    }
+
+    fn set_attribute(&mut self, handle: Handle, value: Self::StoredAttribute) -> Result<(), Box<dyn Error>> {
+        self.values.insert(handle, value);
+        Ok(())
     }
 }
