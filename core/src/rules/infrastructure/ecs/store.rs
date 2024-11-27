@@ -40,14 +40,21 @@ impl<'iter> Iterator for HandleIterator<'iter> {
 }
 
 pub trait AttributeStore: AsAny + std::fmt::Debug {
+    /// Get a string representing the type of Attribute stored by this store
     fn get_attribute_type_name(&self) -> &'static str;
 
+    /// Get the number of attributes stored by this store
     fn len(&self) -> usize;
 
+    /// Iterate all of the handles the have this store's attribute
     fn iter_handles(&self) -> HandleIterator;
 
+    /// Remove the attribute owned by a handle
     fn remove_attribute(&mut self, handle: Handle);
 
+    /// Get the attribute assosiated with this handle as a generic attribute
+    /// 
+    /// If the handle does not have an attribute assosiated with it it will panic
     fn get_attribute_generic(&self, handle: Handle) -> &dyn Attribute;
 }
 
@@ -65,10 +72,14 @@ impl<T: Attribute> Default for GenericAttributeStore<T> {
 }
 
 impl<T: Attribute> GenericAttributeStore<T> {
+    /// Get the attribute assosiated with this handle
+    /// 
+    /// If the handle does not have an attribute assosiated with it it will panic
     pub fn get_attribute(&self, handle: Handle) -> &T {
         self.values.get(&handle).unwrap()
     }
 
+    /// Set the attribute assosiated with this handle
     pub fn set_attribute(&mut self, handle: Handle, value: T) {
         self.values.insert(handle, value);
     }
