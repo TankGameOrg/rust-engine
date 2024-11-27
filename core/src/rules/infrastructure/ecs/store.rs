@@ -1,4 +1,8 @@
-use std::{collections::HashMap, error::Error, sync::atomic::{AtomicUsize, Ordering}};
+use std::{
+    collections::HashMap,
+    error::Error,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use super::Attribute;
 
@@ -30,9 +34,7 @@ impl<'iter> HandleIterator<'iter> {
     }
 
     pub fn empty() -> HandleIterator<'iter> {
-        HandleIterator {
-            iter: None,
-        }
+        HandleIterator { iter: None }
     }
 }
 
@@ -57,12 +59,16 @@ pub trait AttributeStore: std::fmt::Debug + 'static {
     fn remove_attribute(&mut self, handle: Handle);
 
     /// Get the attribute assosiated with this handle as a generic attribute
-    /// 
+    ///
     /// If the handle does not have an attribute assosiated with it it will panic
     fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute;
 
     /// Set the attribute assosiated with this handle
-    fn set_attribute(&mut self, handle: Handle, value: Self::StoredAttribute) -> Result<(), Box<dyn Error>>;
+    fn set_attribute(
+        &mut self,
+        handle: Handle,
+        value: Self::StoredAttribute,
+    ) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Debug)]
@@ -94,10 +100,14 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
     }
 
     fn remove_attribute(&mut self, handle: Handle) {
-        self.values.remove(& handle);
+        self.values.remove(&handle);
     }
 
-    fn set_attribute(&mut self, handle: Handle, value: Self::StoredAttribute) -> Result<(), Box<dyn Error>> {
+    fn set_attribute(
+        &mut self,
+        handle: Handle,
+        value: Self::StoredAttribute,
+    ) -> Result<(), Box<dyn Error>> {
         self.values.insert(handle, value);
         Ok(())
     }
@@ -107,5 +117,5 @@ pub trait Query {
     type StoredAttribute: Attribute;
     type Store: AttributeStore<StoredAttribute = Self::StoredAttribute> + Sized;
 
-    fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter >;
+    fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter>;
 }

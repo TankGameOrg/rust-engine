@@ -1,4 +1,7 @@
-use std::{any::TypeId, collections::{HashMap, HashSet}};
+use std::{
+    any::TypeId,
+    collections::{HashMap, HashSet},
+};
 
 use super::Attribute;
 
@@ -9,10 +12,9 @@ type SignatureBitField = u64;
 pub type AttributeId = usize;
 
 /// The highest attribute value allowed
-/// 
+///
 /// This must be equal to the u* for the signature::SignatureBitField.  So if signature::SignatureBitField is a u64 MAX_ATTRIBUTE_ID should be 63
 pub const MAX_NUM_ATTRIBUTES: AttributeId = 64;
-
 
 /// A list of attributes that a given entity has
 pub struct EntitySignature {
@@ -21,9 +23,7 @@ pub struct EntitySignature {
 
 impl Default for EntitySignature {
     fn default() -> Self {
-        EntitySignature {
-            bits: 0,
-        }
+        EntitySignature { bits: 0 }
     }
 }
 
@@ -75,7 +75,7 @@ impl Iterator for AttributeIdIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.expected_value == 0 {
-            return None
+            return None;
         }
 
         while self.expected_value & 1 != 1 {
@@ -83,7 +83,7 @@ impl Iterator for AttributeIdIter {
             self.expected_value >>= 1;
         }
 
-        // Advance past the 
+        // Advance past the
         self.current_id += 1;
         self.expected_value >>= 1;
 
@@ -170,17 +170,21 @@ impl Signature {
     }
 
     /// Iterate the attribute ids that this signature expects to be included in this entity
-    /// 
+    ///
     /// If an attribute in this signature hasn't been assigned an ID yet it will be skipped
-    pub(super) fn iter_included<'iter>(&'iter self, id_map: &'iter AttributeIdMap) -> impl Iterator<Item = AttributeId> + 'iter {
-        self.included.iter()
+    pub(super) fn iter_included<'iter>(
+        &'iter self,
+        id_map: &'iter AttributeIdMap,
+    ) -> impl Iterator<Item = AttributeId> + 'iter {
+        self.included
+            .iter()
             .map(|type_id| id_map.get_id_from_type_id(type_id))
             .filter(|optional_id| optional_id.is_some())
             .map(|optional_id| optional_id.unwrap())
     }
 
     /// Convert the signature into a format that can be matched against an entity signature
-    /// 
+    ///
     /// If any of the attributes in this signature have not been assigned an ID yet the signature will not compile (return None)
     pub(super) fn compile(&self, mapping: &AttributeIdMap) -> Option<CompiledSignature> {
         let mut expected = 0;
@@ -195,10 +199,7 @@ impl Signature {
             mask |= 1 << mapping.get_id_from_type_id(excluded)?;
         }
 
-        Some(CompiledSignature {
-            mask,
-            expected,
-        })
+        Some(CompiledSignature { mask, expected })
     }
 }
 
@@ -254,7 +255,7 @@ mod test {
         assert!(!entity_sig.has(BAZ_ID));
 
         entity_sig.remove(FOO_ID);
-        
+
         assert!(!entity_sig.has(FOO_ID));
         assert!(entity_sig.has(BAR_ID));
     }
@@ -278,8 +279,14 @@ mod test {
 
         assert!(id_map.get_id::<Foo>().is_some());
         assert!(id_map.get_id::<Bar>().is_none());
-        assert_ne!(id_map.get_or_assign_id::<Bar>(), id_map.get_id::<Foo>().unwrap());
-        assert_eq!(id_map.get_or_assign_id::<Bar>(), id_map.get_or_assign_id::<Bar>());
+        assert_ne!(
+            id_map.get_or_assign_id::<Bar>(),
+            id_map.get_id::<Foo>().unwrap()
+        );
+        assert_eq!(
+            id_map.get_or_assign_id::<Bar>(),
+            id_map.get_or_assign_id::<Bar>()
+        );
     }
 
     #[test]

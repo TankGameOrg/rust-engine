@@ -16,7 +16,7 @@
 //!         .filter(|entity| entity.get::<Health>().unwrap().0 > 0)
 //!         .map(|entity| (entity.get_handle(), entity.get::<Health>().unwrap().0))
 //!         .collect();
-//! 
+//!
 //!     for (handle, health) in living {
 //!         universe.get_entity_mut(handle)?.set(Health(health - 1))?;
 //!     }
@@ -29,7 +29,7 @@
 //!         .filter(|entity| entity.get::<Health>().unwrap().0 == 0)
 //!         .map(|entity| entity.get_handle())
 //!         .collect();
-//! 
+//!
 //!     for handle in dead {
 //!         universe.remove_entity(handle);
 //!     }
@@ -68,7 +68,7 @@ mod signature;
 mod store;
 mod universe;
 
-pub use signature::Signature;
 pub use attribute::Attribute;
-pub use store::{Handle, AttributeStore, HandleIterator, Query};
-pub use universe::{Universe, EntityRef, EntityMut, EntityBuilder, AttributeIter};
+pub use signature::Signature;
+pub use store::{AttributeStore, Handle, HandleIterator, Query};
+pub use universe::{AttributeIter, EntityBuilder, EntityMut, EntityRef, Universe};

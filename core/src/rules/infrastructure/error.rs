@@ -8,9 +8,7 @@ pub struct BasicError {
 
 impl BasicError {
     pub fn new(message: String) -> Box<dyn Error> {
-        return Box::new(BasicError {
-            message,
-        })
+        return Box::new(BasicError { message });
     }
 }
 

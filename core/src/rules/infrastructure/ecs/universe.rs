@@ -1,15 +1,22 @@
-use std::{any::{self, type_name, Any}, collections::HashMap, error::Error};
+use std::{
+    any::{self, type_name, Any},
+    collections::HashMap,
+    error::Error,
+};
 
 use as_any::{AsAny, Downcast};
 
 use crate::basic_error;
 
 use super::{
-    attribute::Attribute, signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature}, store::{AttributeStore, DefaultAttributeStore, Handle, HandleIterator}, Query
+    attribute::Attribute,
+    signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature},
+    store::{AttributeStore, DefaultAttributeStore, Handle, HandleIterator},
+    Query,
 };
 
 /// The internal, object safe interface for storing attributes without knowing the underlying implementation
-/// 
+///
 /// This trait exists to allow the Universe to store a map of AttributeStores for a variety of attribute types
 /// without knowing the type of the underlying attribute store.  While allowing exposing a compile check type
 /// safe interface to our clients.
@@ -51,12 +58,12 @@ impl<T: AttributeStore> GenericAttributeStore for T {
         let value_name = value.as_ref().type_id();
 
         match value.downcast::<T::StoredAttribute>() {
-            Err(_) => {
-                Err(basic_error!("Expected attribute of type {} but got {:?}", type_name::<T>(), value_name))
-            },
-            Ok(value) => {
-                self.set_attribute(handle, *value)
-            }
+            Err(_) => Err(basic_error!(
+                "Expected attribute of type {} but got {:?}",
+                type_name::<T>(),
+                value_name
+            )),
+            Ok(value) => self.set_attribute(handle, *value),
         }
     }
 }
@@ -78,15 +85,15 @@ impl Universe {
     /// # #[derive(Debug)]
     /// # struct DummyAttribute;
     /// # impl Attribute for DummyAttribute {}
-    /// 
+    ///
     /// // Get a Handle to the new entity
     /// let handle = universe.add_entity()
     ///     .set(DummyAttribute)
     ///     .as_handle()?;
-    /// 
+    ///
     /// // Get a reference to the new entity
     /// let entity = universe.add_entity().as_entity()?;
-    /// 
+    ///
     /// // Get a mutable reference to the new entity
     /// let mut entity = universe.add_entity()
     ///     .set(DummyAttribute)
@@ -102,34 +109,46 @@ impl Universe {
     }
 
     fn get_signature(&self, handle: &Handle) -> Result<&EntitySignature, Box<dyn Error>> {
-        self.entities.get(&handle)
+        self.entities
+            .get(&handle)
             .ok_or(basic_error!("There is no entity for handle {:?}", handle))
     }
 
-    fn get_signature_mut(&mut self, handle: &Handle) -> Result<&mut EntitySignature, Box<dyn Error>> {
-        self.entities.get_mut(&handle)
+    fn get_signature_mut(
+        &mut self,
+        handle: &Handle,
+    ) -> Result<&mut EntitySignature, Box<dyn Error>> {
+        self.entities
+            .get_mut(&handle)
             .ok_or(basic_error!("There is no entity for handle {:?}", handle))
     }
 
     /// Get an attribute's value from an entity
     ///
     /// If the entity doesn't exist or it doesn't exist we return an error
-    fn get_attribute<T: Attribute>(
-        &self,
-        handle: Handle,
-    ) -> Result<&T, Box<dyn Error>> {
+    fn get_attribute<T: Attribute>(&self, handle: Handle) -> Result<&T, Box<dyn Error>> {
         let attribute_id = self.id_map.get_id::<T>();
         let signature = self.get_signature(&handle)?;
         if attribute_id.is_none() || !signature.has(attribute_id.unwrap()) {
-            return Err(basic_error!("Entity {:?} does not have the attribute {:?} (signature = {:?})", handle, attribute_id, signature));
+            return Err(basic_error!(
+                "Entity {:?} does not have the attribute {:?} (signature = {:?})",
+                handle,
+                attribute_id,
+                signature
+            ));
         }
 
         let attribute_id = attribute_id.unwrap();
         let store = self.stores.get(&attribute_id).unwrap();
 
-        store.get_attribute(handle)
+        store
+            .get_attribute(handle)
             .downcast_ref()
-            .ok_or(basic_error!("Got the wrong type when reading {} from {:?}", any::type_name::<T>(), handle))
+            .ok_or(basic_error!(
+                "Got the wrong type when reading {} from {:?}",
+                any::type_name::<T>(),
+                handle
+            ))
     }
 
     /// Set an attribute's value for an entity
@@ -144,7 +163,10 @@ impl Universe {
         self.get_signature_mut(&handle)?.add(attribute_id);
 
         if !self.stores.contains_key(&attribute_id) {
-            self.stores.insert(attribute_id, Box::new(DefaultAttributeStore::<T>::default()));
+            self.stores.insert(
+                attribute_id,
+                Box::new(DefaultAttributeStore::<T>::default()),
+            );
         }
 
         let store = self.stores.get_mut(&attribute_id).unwrap();
@@ -154,10 +176,7 @@ impl Universe {
     /// Remove an attribute from an entity
     ///
     /// If the entity doesn't exist we return an error
-    fn remove_attribute<T: Attribute>(
-        &mut self,
-        handle: Handle
-    ) -> Result<(), Box<dyn Error>> {
+    fn remove_attribute<T: Attribute>(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         let attribute_id = self.id_map.get_id::<T>();
         if let None = attribute_id {
             return Ok(());
@@ -169,7 +188,7 @@ impl Universe {
         if !signature.has(attribute_id) {
             return Ok(());
         }
-        
+
         signature.remove(attribute_id);
 
         let attribute_data = self.stores.get_mut(&attribute_id).unwrap();
@@ -182,10 +201,7 @@ impl Universe {
     ///
     /// If the entity doesn't exist we return an error
     #[inline]
-    fn has_attribute<T: Attribute>(
-        &self,
-        handle: Handle
-    ) -> Result<bool, Box<dyn Error>> {
+    fn has_attribute<T: Attribute>(&self, handle: Handle) -> Result<bool, Box<dyn Error>> {
         match self.id_map.get_id::<T>() {
             Some(attribute_id) => Ok(self.get_signature(&handle)?.has(attribute_id)),
             None => Ok(false),
@@ -193,11 +209,7 @@ impl Universe {
     }
 
     /// Iterate the attributes on an entity
-    fn iter_attributes(
-        &self,
-        handle: Handle,
-    ) -> Result<AttributeIter, Box<dyn Error>>
-    {
+    fn iter_attributes(&self, handle: Handle) -> Result<AttributeIter, Box<dyn Error>> {
         let signature = self.get_signature(&handle)?;
 
         Ok(AttributeIter {
@@ -281,11 +293,9 @@ impl Universe {
         }
 
         let compiled_signature = signature.compile(&self.id_map);
-        handle_iter.filter(move |handle| {
-            match &compiled_signature {
-                Some(compiled) => compiled.is_match(self.entities.get(handle).unwrap()),
-                None => false,
-            }
+        handle_iter.filter(move |handle| match &compiled_signature {
+            Some(compiled) => compiled.is_match(self.entities.get(handle).unwrap()),
+            None => false,
         })
     }
 
@@ -302,7 +312,7 @@ impl Universe {
     }
 
     /// Set the structure used to store a specific type of attribute
-    /// 
+    ///
     /// The store must be set before any attributes of its StoredAttribute type have been added to the Universe
     #[inline]
     pub fn set_attribute_store<S: AttributeStore>(&mut self, store: S) {
@@ -314,7 +324,10 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn query_handle<'iter, Q: Query>(&'iter self, query: &'iter Q) -> Result<impl Iterator<Item = Handle> + 'iter, Box<dyn Error>> {
+    pub fn query_handle<'iter, Q: Query>(
+        &'iter self,
+        query: &'iter Q,
+    ) -> Result<impl Iterator<Item = Handle> + 'iter, Box<dyn Error>> {
         let attribute_id = self.id_map.get_id::<Q::StoredAttribute>();
         if attribute_id.is_none() {
             return Ok(HandleIterator::empty());
@@ -332,12 +345,14 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn query<'iter, Q: Query>(&'iter self, query: &'iter Q) -> Result<impl Iterator<Item = EntityRef> + 'iter, Box<dyn Error>> {
-        Ok(self.query_handle(query)?
-            .map(|handle| EntityRef {
-                universe: self,
-                handle,
-            }))
+    pub fn query<'iter, Q: Query>(
+        &'iter self,
+        query: &'iter Q,
+    ) -> Result<impl Iterator<Item = EntityRef> + 'iter, Box<dyn Error>> {
+        Ok(self.query_handle(query)?.map(|handle| EntityRef {
+            universe: self,
+            handle,
+        }))
     }
 }
 
@@ -359,7 +374,7 @@ impl<'universe> Iterator for AttributeIter<'universe> {
 }
 
 /// A helper for building entities
-/// 
+///
 /// If any step of the build fails the entity will be removed
 #[must_use]
 pub struct EntityBuilder<'universe> {
@@ -460,15 +475,13 @@ impl<'universe> EntityRef<'universe> {
     /// #    .set(DummyAttribute(1))
     /// #    .as_handle()?;
     /// let entity = universe.get_entity(handle)?;
-    /// 
+    ///
     /// let DummyAttribute(_value) = entity.get()?;
     /// #
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn get<T: Attribute>(
-        &self
-    ) -> Result<&'universe T, Box<dyn Error>> {
+    pub fn get<T: Attribute>(&self) -> Result<&'universe T, Box<dyn Error>> {
         self.universe.get_attribute(self.handle)
     }
 
@@ -485,15 +498,13 @@ impl<'universe> EntityRef<'universe> {
     /// #    .set(DummyAttribute(1))
     /// #    .as_handle()?;
     /// let entity = universe.get_entity(handle)?;
-    /// 
+    ///
     /// assert!(entity.has::<DummyAttribute>());
     /// #
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn has<T: Attribute>(
-        &self
-    ) -> bool {
+    pub fn has<T: Attribute>(&self) -> bool {
         self.universe.has_attribute::<T>(self.handle).unwrap()
     }
 
@@ -510,7 +521,7 @@ impl<'universe> EntityRef<'universe> {
     /// #    .set(DummyAttribute(1))
     /// #    .as_handle()?;
     /// let entity = universe.get_entity(handle)?;
-    /// 
+    ///
     /// for attribute in &entity {
     ///     println!("Attribute: {:?}", attribute);
     /// }
@@ -518,10 +529,7 @@ impl<'universe> EntityRef<'universe> {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn iter(
-        &self,
-    ) -> AttributeIter<'universe>
-    {
+    pub fn iter(&self) -> AttributeIter<'universe> {
         self.universe.iter_attributes(self.handle).unwrap()
     }
 
@@ -539,7 +547,7 @@ impl<'universe> EntityRef<'universe> {
     /// #    .set(DummyAttribute(1))
     /// #    .as_handle()?;
     /// let entity = universe.get_entity(handle)?;
-    /// 
+    ///
     /// assert!(entity.is_match(signature!(DummyAttribute)));
     /// #
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -574,12 +582,10 @@ impl<'universe> EntityMut<'universe> {
     }
 
     /// Get an attribute's value from this entity
-    /// 
+    ///
     /// Same as [`EntityRef::get`]
     #[inline]
-    pub fn get<T: Attribute>(
-        &self
-    ) -> Result<&T, Box<dyn Error>> {
+    pub fn get<T: Attribute>(&self) -> Result<&T, Box<dyn Error>> {
         self.universe.get_attribute(self.handle)
     }
 
@@ -594,16 +600,13 @@ impl<'universe> EntityMut<'universe> {
     /// #
     /// # let handle = universe.add_entity().as_handle()?;
     /// let mut entity = universe.get_entity_mut(handle)?;
-    /// 
+    ///
     /// entity.set(DummyAttribute(3));
     /// #
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn set<T: Attribute>(
-        &mut self,
-        value: T,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn set<T: Attribute>(&mut self, value: T) -> Result<(), Box<dyn Error>> {
         self.universe.set_attribute(self.handle, value)
     }
 
@@ -618,42 +621,37 @@ impl<'universe> EntityMut<'universe> {
     /// #
     /// # let handle = universe.add_entity().as_handle()?;
     /// let mut entity = universe.get_entity_mut(handle)?;
-    /// 
+    ///
     /// entity.remove::<DummyAttribute>();
     /// #
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     #[inline]
-    pub fn remove<T: Attribute>(
-        &mut self
-    ) {
+    pub fn remove<T: Attribute>(&mut self) {
         self.universe.remove_attribute::<T>(self.handle).unwrap();
     }
 
     /// Check if this entity has an attribute
-    /// 
+    ///
     /// Same as [`EntityRef::has`]
     #[inline]
-    pub fn has<T: Attribute>(
-        &self
-    ) -> bool {
+    pub fn has<T: Attribute>(&self) -> bool {
         self.universe.has_attribute::<T>(self.handle).unwrap()
     }
 
     /// Iterate the attributes on this entity
-    /// 
+    ///
     /// Same as [`EntityRef::iter`]
     #[inline]
-    pub fn iter<'iter>(
-        &'iter self,
-    ) -> AttributeIter<'iter>
-    where 'universe: 'iter
+    pub fn iter<'iter>(&'iter self) -> AttributeIter<'iter>
+    where
+        'universe: 'iter,
     {
         self.universe.iter_attributes(self.handle).unwrap()
     }
 
     /// Check if the this entity matches the signature given
-    /// 
+    ///
     /// Same as [`EntityRef::is_match`]
     #[inline]
     pub fn is_match(&self, signature: Signature) -> bool {
@@ -683,7 +681,8 @@ mod test {
     #[test]
     fn can_modify_and_retrieve_entities() {
         let mut universe = Universe::default();
-        let handle = universe.add_entity()
+        let handle = universe
+            .add_entity()
             .set(DummyAttribute(2))
             .as_handle()
             .unwrap();
@@ -711,12 +710,14 @@ mod test {
 
     fn make_gather_universe() -> (Universe, Handle, Handle) {
         let mut universe = Universe::default();
-        let first_handle = universe.add_entity()
+        let first_handle = universe
+            .add_entity()
             .set(DummyAttribute(2))
             .as_handle()
             .unwrap();
 
-        let second_handle = universe.add_entity()
+        let second_handle = universe
+            .add_entity()
             .set(DummyAttribute(1))
             .set(DummyAttribute2)
             .as_handle()
@@ -753,7 +754,8 @@ mod test {
     fn can_gather_entities() {
         let (universe, _, _) = make_gather_universe();
 
-        let dummy_total = universe.gather(signature!(DummyAttribute))
+        let dummy_total = universe
+            .gather(signature!(DummyAttribute))
             .map(|entity| entity.get::<DummyAttribute>().unwrap().0)
             .reduce(|a, b| a + b);
 
@@ -763,13 +765,15 @@ mod test {
     #[test]
     fn can_iterate_attributes() {
         let mut universe = Universe::default();
-        let entity = universe.add_entity()
+        let entity = universe
+            .add_entity()
             .set(DummyAttribute(1))
             .set(DummyAttribute2)
             .as_entity()
             .unwrap();
 
-        let attributes: HashSet<TypeId> = entity.into_iter()
+        let attributes: HashSet<TypeId> = entity
+            .into_iter()
             .map(|attr| attr.as_any().type_id())
             .collect();
 
@@ -790,11 +794,14 @@ mod test {
             self.handle_to_value.get(&handle).unwrap()
         }
 
-        fn set_attribute(&mut self, handle: Handle, value: Self::StoredAttribute) -> Result<(), Box<dyn Error>> {
+        fn set_attribute(
+            &mut self,
+            handle: Handle,
+            value: Self::StoredAttribute,
+        ) -> Result<(), Box<dyn Error>> {
             if value.0 > 10 {
                 Err(basic_error!("Value must not be more than 10"))
-            }
-            else {
+            } else {
                 self.handle_to_value.insert(handle, value);
                 Ok(())
             }
@@ -821,9 +828,11 @@ mod test {
 
         fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter> {
             HandleIterator::new(
-                store.handle_to_value.iter()
+                store
+                    .handle_to_value
+                    .iter()
                     .filter(|(_, value)| value.0 < self.0)
-                    .map(|(handle, _)| handle)
+                    .map(|(handle, _)| handle),
             )
         }
     }
@@ -836,7 +845,8 @@ mod test {
         universe.add_entity().set(DummyAttribute(3)).unwrap();
         universe.add_entity().set(DummyAttribute(7)).unwrap();
 
-        let matches: Vec<&DummyAttribute> = universe.query(&LessThan(5))
+        let matches: Vec<&DummyAttribute> = universe
+            .query(&LessThan(5))
             .unwrap()
             .map(|entity| entity.get().unwrap())
             .collect();
