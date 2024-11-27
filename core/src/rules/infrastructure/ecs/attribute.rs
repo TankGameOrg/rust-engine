@@ -5,7 +5,7 @@ pub trait Attribute: std::fmt::Debug + Send + Sync + AsAny {}
 
 // A basic attribute for writing unit tests
 #[cfg(test)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct DummyAttribute(pub u32);
 
 #[cfg(test)]

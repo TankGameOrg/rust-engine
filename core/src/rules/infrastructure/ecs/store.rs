@@ -19,13 +19,19 @@ impl Handle {
 
 /// A wrapper for any iterator that returns a Handle
 pub struct HandleIterator<'iter> {
-    iter: Box<dyn Iterator<Item = Handle> + 'iter>,
+    iter: Option<Box<dyn Iterator<Item = Handle> + 'iter>>,
 }
 
 impl<'iter> HandleIterator<'iter> {
     pub fn new(iter: impl Iterator<Item = &'iter Handle> + 'iter) -> HandleIterator<'iter> {
         HandleIterator {
-            iter: Box::new(iter.map(|handle| *handle)),
+            iter: Some(Box::new(iter.map(|handle| *handle))),
+        }
+    }
+
+    pub fn empty() -> HandleIterator<'iter> {
+        HandleIterator {
+            iter: None,
         }
     }
 }
@@ -34,7 +40,7 @@ impl<'iter> Iterator for HandleIterator<'iter> {
     type Item = Handle;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+        self.iter.as_mut()?.next()
     }
 }
 
@@ -95,4 +101,11 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
         self.values.insert(handle, value);
         Ok(())
     }
+}
+
+pub trait Query {
+    type StoredAttribute: Attribute;
+    type Store: AttributeStore<StoredAttribute = Self::StoredAttribute> + Sized;
+
+    fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter >;
 }

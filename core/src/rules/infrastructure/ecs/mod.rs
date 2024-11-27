@@ -18,7 +18,7 @@
 //!         .collect();
 //! 
 //!     for (handle, health) in living {
-//!         universe.get_entity_mut(handle)?.set(Health(health - 1));
+//!         universe.get_entity_mut(handle)?.set(Health(health - 1))?;
 //!     }
 //!
 //!     Ok(())
@@ -42,11 +42,11 @@
 //! // Let's add a few Entities to our universe
 //! let tank1_handle = universe.add_entity()
 //!     .set(Health(2))
-//!     .as_handle();
+//!     .as_handle()?;
 //!
 //! let tank2_handle = universe.add_entity()
 //!     .set(Health(1))
-//!     .as_handle();
+//!     .as_handle()?;
 //!
 //! damage_living(&mut universe)?;
 //!
@@ -70,5 +70,5 @@ mod universe;
 
 pub use signature::Signature;
 pub use attribute::Attribute;
-pub use store::{Handle, AttributeStore, HandleIterator};
+pub use store::{Handle, AttributeStore, HandleIterator, Query};
 pub use universe::{Universe, EntityRef, EntityMut, EntityBuilder, AttributeIter};
