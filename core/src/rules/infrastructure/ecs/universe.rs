@@ -110,7 +110,7 @@ impl Universe {
 
     fn get_signature(&self, handle: &Handle) -> Result<&EntitySignature, Box<dyn Error>> {
         self.entities
-            .get(&handle)
+            .get(handle)
             .ok_or(basic_error!("There is no entity for handle {:?}", handle))
     }
 
@@ -119,7 +119,7 @@ impl Universe {
         handle: &Handle,
     ) -> Result<&mut EntitySignature, Box<dyn Error>> {
         self.entities
-            .get_mut(&handle)
+            .get_mut(handle)
             .ok_or(basic_error!("There is no entity for handle {:?}", handle))
     }
 
@@ -162,12 +162,8 @@ impl Universe {
         let attribute_id = self.id_map.get_or_assign_id::<T>();
         self.get_signature_mut(&handle)?.add(attribute_id);
 
-        if !self.stores.contains_key(&attribute_id) {
-            self.stores.insert(
-                attribute_id,
-                Box::new(DefaultAttributeStore::<T>::default()),
-            );
-        }
+        self.stores.entry(attribute_id)
+            .or_insert_with(|| Box::new(DefaultAttributeStore::<T>::default()));
 
         let store = self.stores.get_mut(&attribute_id).unwrap();
         store.set_attribute(handle, Box::new(value))
@@ -178,7 +174,7 @@ impl Universe {
     /// If the entity doesn't exist we return an error
     fn remove_attribute<T: Attribute>(&mut self, handle: Handle) -> Result<(), Box<dyn Error>> {
         let attribute_id = self.id_map.get_id::<T>();
-        if let None = attribute_id {
+        if attribute_id.is_none() {
             return Ok(());
         }
 
@@ -215,7 +211,7 @@ impl Universe {
         Ok(AttributeIter {
             universe: self,
             attribute_id_iter: signature.iter_attribute_ids(),
-            handle: handle,
+            handle,
         })
     }
 
@@ -276,10 +272,10 @@ impl Universe {
     }
 
     /// Collect the handles for all entities in the universe that match the specified signature
-    pub fn gather_handles<'iter>(
-        &'iter self,
+    pub fn gather_handles(
+        &self,
         signature: Signature,
-    ) -> impl Iterator<Item = Handle> + 'iter {
+    ) -> impl Iterator<Item = Handle> + '_ {
         let mut handle_iter = HandleIterator::new(self.entities.keys());
         let mut length = self.entities.len();
 
@@ -301,10 +297,10 @@ impl Universe {
 
     /// Collect the all of the entities in the universe that match the specified signature
     #[inline]
-    pub fn gather<'iter>(
-        &'iter self,
+    pub fn gather(
+        &self,
         signature: Signature,
-    ) -> impl Iterator<Item = EntityRef> + 'iter {
+    ) -> impl Iterator<Item = EntityRef> {
         self.gather_handles(signature).map(|handle| EntityRef {
             universe: self,
             handle,

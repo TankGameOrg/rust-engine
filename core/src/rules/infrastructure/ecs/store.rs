@@ -29,7 +29,7 @@ pub struct HandleIterator<'iter> {
 impl<'iter> HandleIterator<'iter> {
     pub fn new(iter: impl Iterator<Item = &'iter Handle> + 'iter) -> HandleIterator<'iter> {
         HandleIterator {
-            iter: Some(Box::new(iter.map(|handle| *handle))),
+            iter: Some(Box::new(iter.cloned())),
         }
     }
 
@@ -51,6 +51,11 @@ pub trait AttributeStore: std::fmt::Debug + 'static {
 
     /// Get the number of attributes stored by this store
     fn len(&self) -> usize;
+
+    /// Check if an attribute store has any elements
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     /// Iterate all of the handles the have this store's attribute
     fn iter_handles(&self) -> HandleIterator;

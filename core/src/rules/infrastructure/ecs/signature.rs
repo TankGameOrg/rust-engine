@@ -17,14 +17,9 @@ pub type AttributeId = usize;
 pub const MAX_NUM_ATTRIBUTES: AttributeId = 64;
 
 /// A list of attributes that a given entity has
+#[derive(Default)]
 pub struct EntitySignature {
     bits: SignatureBitField,
-}
-
-impl Default for EntitySignature {
-    fn default() -> Self {
-        EntitySignature { bits: 0 }
-    }
 }
 
 impl EntitySignature {
@@ -114,7 +109,7 @@ impl AttributeIdMap {
     /// Get the attribute ID for an attribute's TypeId
     #[inline]
     fn get_id_from_type_id(&self, type_id: &TypeId) -> Option<AttributeId> {
-        self.mappings.get(type_id).map(|id| *id)
+        self.mappings.get(type_id).cloned()
     }
 
     /// Get the attribute ID for this attribute or assign it one if one doesn't already exist
@@ -178,9 +173,7 @@ impl Signature {
     ) -> impl Iterator<Item = AttributeId> + 'iter {
         self.included
             .iter()
-            .map(|type_id| id_map.get_id_from_type_id(type_id))
-            .filter(|optional_id| optional_id.is_some())
-            .map(|optional_id| optional_id.unwrap())
+            .filter_map(|type_id| id_map.get_id_from_type_id(type_id))
     }
 
     /// Convert the signature into a format that can be matched against an entity signature

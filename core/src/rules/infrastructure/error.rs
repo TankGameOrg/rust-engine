@@ -7,8 +7,8 @@ pub struct BasicError {
 }
 
 impl BasicError {
-    pub fn new(message: String) -> Box<dyn Error> {
-        return Box::new(BasicError { message });
+    pub fn new_boxed(message: String) -> Box<dyn Error> {
+        Box::new(BasicError { message })
     }
 }
 
@@ -23,6 +23,6 @@ impl Error for BasicError {}
 #[macro_export]
 macro_rules! basic_error {
     ($($token:tt)+) => {
-        $crate::rules::infrastructure::BasicError::new(format!($($token)+))
+        $crate::rules::infrastructure::BasicError::new_boxed(format!($($token)+))
     };
 }
