@@ -9,10 +9,7 @@ use as_any::Downcast;
 use crate::basic_error;
 
 use super::{
-    attribute::{Attribute, BoxedAttribute},
-    signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature},
-    store::{AttributeStore, Handle, HandleIterator},
-    Query, QueryOne,
+    attribute::{Attribute, BoxedAttribute}, signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature}, store::{AttributeStore, Handle, HandleIterator}, Properties, Query, QueryOne
 };
 
 /// A collection of entities where each entity is made up one or more Attributes
@@ -21,6 +18,7 @@ pub struct Universe {
     id_map: AttributeIdMap,
     entities: HashMap<Handle, EntitySignature>,
     stores: HashMap<AttributeId, Box<dyn AttributeStore>>,
+    properties: Properties,
 }
 
 impl Universe {
@@ -110,7 +108,7 @@ impl Universe {
         self.get_signature_mut(&handle)?.add(attribute_id);
 
         self.stores.entry(attribute_id)
-            .or_insert_with(|| value.create_store());
+            .or_insert_with(|| value.create_store(&self.properties));
 
         let store = self.stores.get_mut(&attribute_id).unwrap();
         store.set_attribute(handle, BoxedAttribute::new(value))
@@ -320,6 +318,18 @@ impl Universe {
                 universe: self,
                 handle,
             })
+    }
+
+    /// Access the properties stored in a universe
+    #[inline]
+    pub fn get_properties(&self) -> &Properties {
+        &self.properties
+    }
+
+    /// Access and modify the properties stored in a universe
+    #[inline]
+    pub fn get_properties_mut(&mut self) -> &mut Properties {
+        &mut self.properties
     }
 }
 
@@ -753,7 +763,7 @@ mod test {
     struct CustomStoreAttribute(u32);
 
     impl Attribute for CustomStoreAttribute {
-        fn create_store(&self) -> Box<dyn AttributeStore> where Self: Sized {
+        fn create_store(&self, _properties: &Properties) -> Box<dyn AttributeStore> where Self: Sized {
             Box::new(TestStore::default())
         }
     }

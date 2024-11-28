@@ -4,11 +4,11 @@ use as_any::AsAny;
 
 use crate::basic_error;
 
-use super::{store::DefaultAttributeStore, AttributeStore};
+use super::{store::DefaultAttributeStore, AttributeStore, Properties};
 
 /// The common ancestor for all attribute values
 pub trait Attribute: std::fmt::Debug + Send + Sync + AsAny {
-    fn create_store(&self) -> Box<dyn AttributeStore> where Self: Sized {
+    fn create_store(&self, _properties: &Properties) -> Box<dyn AttributeStore> where Self: Sized {
         Box::new(DefaultAttributeStore::<Self>::default())
     }
 }

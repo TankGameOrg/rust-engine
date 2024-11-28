@@ -1,6 +1,6 @@
-use std::{collections::HashMap, error::Error};
+use std::{cmp::min, collections::HashMap, error::Error};
 
-use crate::{basic_error, rules::infrastructure::ecs::{Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Query, QueryOne}};
+use crate::{basic_error, rules::infrastructure::ecs::{Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Properties, Property, Query, QueryOne}};
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum Level {
@@ -27,7 +27,12 @@ impl Position {
     }
 }
 
-impl Attribute for Position {}
+impl Attribute for Position {
+    fn create_store(&self, properties: &Properties) -> Box<dyn AttributeStore> where Self: Sized {
+        assert!(properties.has::<Bounds>(), "The universe must have the Bounds property to use the Position attribute");
+        Box::new(Board::new(properties.get::<Bounds>().unwrap().clone()))
+    }
+}
 
 impl QueryOne for Position {
     type StoredAttribute = Position;
@@ -41,38 +46,215 @@ impl QueryOne for Position {
     }
 }
 
-#[derive(Debug)]
-pub struct Board {
+#[derive(Debug, Clone)]
+pub struct Bounds {
     width: usize,
     height: usize,
+}
+
+impl Property for Bounds {}
+
+impl Bounds {
+    #[inline]
+    pub fn new(width: usize, height: usize) -> Bounds {
+        Bounds {
+            width,
+            height,
+        }
+    }
+
+    #[inline]
+    pub fn get_width(&self) -> usize {
+        self.width
+    }
+
+    #[inline]
+    pub fn get_height(&self) -> usize {
+        self.height
+    }
+
+    #[inline]
+    pub fn is_valid(&self, position: &Position) -> bool {
+        position.x >= self.width || position.y >= self.height
+    }
+
+    #[inline]
+    pub fn verify_position(&self, position: &Position) -> Result<(), Box<dyn Error>> {
+        if self.is_valid(position) {
+            return Err(basic_error!("Position {:?} is outside the valid bounds ({}, {})", position, self.width, self.height))
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct RectangleQuery {
+    levels: Vec<Level>,
+    top_left_x: usize,
+    top_left_y: usize,
+    bottom_right_x: usize,
+    bottom_right_y: usize,
+}
+
+impl RectangleQuery {
+    /// Set the top left corner of the query
+    pub fn top_left(mut self, x: usize, y: usize) -> Self {
+        self.top_left_x = x;
+        self.top_left_y = y;
+        self
+    }
+
+    /// Set the bottom right corner of the query
+    pub fn bottom_right(mut self, x: usize, y: usize) -> Self {
+        self.bottom_right_x = x;
+        self.bottom_right_y = y;
+        self
+    }
+
+    /// Add a level to search
+    pub fn level(mut self, level: Level) -> Self {
+        self.levels.push(level);
+        self
+    }
+
+    /// Create a square where the top of the rectangle is radius away from the center (the same applies to all sides)
+    pub fn centered_at(center: Position, radius: usize) -> Self {
+        let top_left_x = if center.x < radius { 0 } else { center.x - radius };
+        let top_left_y = if center.y < radius { 0 } else { center.y - radius };
+
+        Self::default()
+            .top_left(top_left_x, top_left_y)
+            .bottom_right(center.x + radius, center.y + radius)
+            .level(center.level)
+    }
+
+    /// All of the spaces adjacent to and including center
+    pub fn adjacent_to(center: Position) -> Self {
+        Self::centered_at(center, 1)
+    }
+}
+
+enum IteratorState {
+    New,
+    Ended,
+    Active(Position),
+}
+
+struct RectanglePositionIterator<'iter> {
+    bounds: &'iter Bounds,
+    query: &'iter RectangleQuery,
+    state: IteratorState,
+}
+
+impl<'iter> RectanglePositionIterator<'iter> {
+    fn new(bounds: &'iter Bounds, query: &'iter RectangleQuery) -> Self {
+        Self {
+            bounds,
+            query,
+            state: IteratorState::New,
+        }
+    }
+
+    #[inline]
+    fn get_bottom_right_x(&self) -> usize {
+        min(self.query.bottom_right_x, self.bounds.get_width() - 1)
+    }
+
+    #[inline]
+    fn get_bottom_right_y(&self) -> usize {
+        min(self.query.bottom_right_y, self.bounds.get_height() - 1)
+    }
+}
+
+impl<'iter> Iterator for RectanglePositionIterator<'iter> {
+    type Item = Position;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let query = self.query;
+
+        // Attempt to find the next position even if it isn't valid
+        self.state = match self.state {
+            IteratorState::Active(mut current_position) => {
+                if current_position.x < self.get_bottom_right_x() {
+                    current_position.x += 1;
+                    IteratorState::Active(current_position)
+                }
+                else if current_position.y < self.get_bottom_right_y() {
+                    current_position.x = query.top_left_x;
+                    current_position.y += 1;
+                    IteratorState::Active(current_position)
+                }
+                else {
+                    let index = query.levels.iter()
+                        .position(|level| *level == current_position.level)
+                        .unwrap();
+
+                    if index + 1 == query.levels.len() {
+                        IteratorState::Ended
+                    }
+                    else {
+                        current_position.x = query.top_left_x;
+                        current_position.y = query.top_left_y;
+                        current_position.level = query.levels[index + 1];
+                        IteratorState::Active(current_position)
+                    }
+                }
+            },
+            IteratorState::New => {
+                if query.levels.is_empty() {
+                    IteratorState::Ended
+                }
+                else if query.top_left_x > self.get_bottom_right_x() || query.top_left_y > self.get_bottom_right_y() {
+                    IteratorState::Ended
+                }
+                else {
+                    IteratorState::Active(Position::new(query.levels[0], query.top_left_x, query.top_left_y))
+                }
+            },
+            IteratorState::Ended => IteratorState::Ended,
+        };
+
+        match self.state {
+            IteratorState::Active(current_position) => Some(current_position),
+            _ => None,
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Board {
+    bounds: Bounds,
     board: Vec<Option<Handle>>,
     reverse_lookups: HashMap<Handle, Position>,
 }
 
 impl Board {
     #[inline]
-    pub fn new(width: usize, height: usize) -> Board {
+    pub fn new(bounds: Bounds) -> Board {
         Board {
-            width,
-            height,
-            board: vec![None; NUM_LEVELS * width * height],
+            board: vec![None; NUM_LEVELS * bounds.get_width() * bounds.get_height()],
+            bounds,
             reverse_lookups: HashMap::new(),
         }
     }
 
     fn get_index(&self, position: &Position) -> Result<usize, Box<dyn Error>> {
-        if position.x >= self.width || position.y >= self.height {
-            return Err(basic_error!("Position {:?} is outside the valid bounds ({}, {})", position, self.width, self.height))
-        }
+        self.bounds.verify_position(position)?;
 
         let floor_index = match position.level {
             Level::Unit => 0,
             Level::Floor => 1,
         };
 
-        Ok((floor_index * self.width * self.height) +
-            (position.y * self.width) +
+        Ok((floor_index * self.bounds.get_width() * self.bounds.get_height()) +
+            (position.y * self.bounds.get_width()) +
             position.x)
+    }
+
+    fn get_from_position(&self, position: &Position) -> Option<Handle> {
+        self.board[self.get_index(position).ok()?]
     }
 }
 
@@ -117,89 +299,16 @@ impl AttributeStore for Board {
     }
 }
 
-pub struct AreaQuery {
-    center: Position,
-    radius: usize,
-}
-
-impl AreaQuery {
-    pub fn new(center: Position, radius: usize) -> AreaQuery {
-        AreaQuery {
-            center,
-            radius,
-        }
-    }
-
-    pub fn adjacent_to(center: Position) -> AreaQuery {
-        AreaQuery::new(center, 1)
-    }
-
-    fn iter<'iter>(&'iter self, store: &'iter Board) -> AreaIterator<'iter> {
-        let start_x = if self.center.x < self.radius { 0 } else { self.center.x - self.radius };
-        let start_y = if self.center.y < self.radius { 0 } else { self.center.y - self.radius };
-        let start_position = Position::new(self.center.level, start_x, start_y);
-        let end_position = Position::new(self.center.level, self.center.x + self.radius, self.center.y + self.radius);
-
-        AreaIterator::new(store, start_position, end_position)
-    }
-}
-
-struct AreaIterator<'store> {
-    current_position: Position,
-    start_x: usize,
-    end_position: Position,
-    store: &'store Board
-}
-
-impl<'store> AreaIterator<'store> {
-    fn new(store: &Board, start_position: Position, end_position: Position) -> AreaIterator {
-        assert!(start_position.level == end_position.level);
-
-        AreaIterator {
-            start_x: start_position.x,
-            current_position: start_position,
-            end_position,
-            store,
-        }
-    }
-
-    fn advance_position(&mut self) {
-        if self.current_position.x < self.end_position.x {
-            self.current_position.x += 1;
-        }
-        else {
-            self.current_position.x = self.start_x;
-            self.current_position.y += 1;
-        }
-    }
-}
-
-impl<'store> Iterator for AreaIterator<'store> {
-    type Item = Handle;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            // We've already gone through the entire area
-            if self.current_position > self.end_position {
-                return None;
-            }
-            
-            if let Some(handle) = self.current_position.query_one(self.store) {
-                self.advance_position();
-                return Some(handle);
-            }
-
-            self.advance_position();
-        }
-    }
-}
-
-impl Query for AreaQuery {
+impl Query for RectangleQuery {
     type StoredAttribute = Position;
     type Store = Board;
 
     fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter> {
-        HandleIterator::new(self.iter(store))
+        HandleIterator::new(
+            RectanglePositionIterator::new(&store.bounds, self)
+                .map(|position| store.get_from_position(&position))
+                .flatten()
+        )
     }
 }
 
@@ -214,8 +323,7 @@ mod test {
     #[test]
     fn get_and_set_attributes() {
         let mut universe = Universe::default();
-        // TODO: Fix me
-        // universe.set_attribute_store(Board::new(3, 4));
+        universe.get_properties_mut().set(Bounds::new(3, 4));
         let position1 = Position::new(Level::Unit, 1, 3);
         let position2 = Position::new(Level::Floor, 1, 3);
         let position3 = Position::new(Level::Unit, 2, 2);
@@ -238,11 +346,10 @@ mod test {
         assert_eq!(gathered.len(), 2);
     }
 
-    // #[test]
+    #[test]
     fn our_of_bounds_and_overlap() {
         let mut universe = Universe::default();
-        // TODO: Fix me
-        // universe.set_attribute_store(Board::new(5, 3));
+        universe.get_properties_mut().set(Bounds::new(5, 3));
 
         // Out of bounds
         let result = universe.add_entity()
@@ -285,11 +392,10 @@ mod test {
             .unwrap();
     }
 
-    // #[test]
+    #[test]
     fn find_by_position() {
         let mut universe = Universe::default();
-        // TODO: Fix me
-        // universe.set_attribute_store(Board::new(3, 3));
+        universe.get_properties_mut().set(Bounds::new(3, 3));
 
         let position = Position::new(Level::Unit, 0, 0);
         let expected_handle = universe.add_entity()
@@ -313,11 +419,10 @@ mod test {
         assert_eq!(found, expected_set);
     }
 
-    // #[test]
+    #[test]
     fn find_by_area() {
         let mut universe = Universe::default();
-        // TODO: Fix me
-        // universe.set_attribute_store(Board::new(5, 5));
+        universe.get_properties_mut().set(Bounds::new(5, 5));
 
         let handle_0_1 = universe.add_entity()
             .set(Position::new(Level::Unit, 0, 1))
@@ -335,15 +440,15 @@ mod test {
             .unwrap();
 
         verify_query(&universe, 
-            AreaQuery::adjacent_to(Position::new(Level::Unit, 0, 0)),
+            RectangleQuery::adjacent_to(Position::new(Level::Unit, 0, 0)),
             vec![handle_0_1]);
 
         verify_query(&universe, 
-            AreaQuery::adjacent_to(Position::new(Level::Unit, 1, 1)),
+            RectangleQuery::adjacent_to(Position::new(Level::Unit, 1, 1)),
             vec![handle_0_1, handle_2_2]);
 
         verify_query(&universe, 
-            AreaQuery::new(Position::new(Level::Floor, 4, 2), 4),
+            RectangleQuery::centered_at(Position::new(Level::Floor, 4, 2), 4),
             vec![handle_0_0_floor]);
     }
 }
