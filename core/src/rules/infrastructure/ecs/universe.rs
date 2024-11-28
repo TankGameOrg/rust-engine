@@ -1,79 +1,26 @@
 use std::{
-    any::{self, type_name, Any},
+    any::{self, type_name},
     collections::HashMap,
     error::Error,
 };
 
-use as_any::{AsAny, Downcast};
+use as_any::Downcast;
 
 use crate::basic_error;
 
 use super::{
-    attribute::Attribute,
+    attribute::{Attribute, BoxedAttribute},
     signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature},
-    store::{AttributeStore, DefaultAttributeStore, Handle, HandleIterator},
+    store::{AttributeStore, Handle, HandleIterator},
     Query, QueryOne,
 };
-
-/// The internal, object safe interface for storing attributes without knowing the underlying implementation
-///
-/// This trait exists to allow the Universe to store a map of AttributeStores for a variety of attribute types
-/// without knowing the type of the underlying attribute store.  While allowing exposing a compile check type
-/// safe interface to our clients.
-trait GenericAttributeStore: std::fmt::Debug + AsAny {
-    /// See [`AttributeStore::len`]
-    fn len(&self) -> usize;
-
-    /// See [`AttributeStore::iter_handles`]
-    fn iter_handles(&self) -> HandleIterator;
-
-    /// See [`AttributeStore::remove_attribute`]
-    fn remove_attribute(&mut self, handle: Handle);
-
-    /// See [`AttributeStore::get_attribute`]
-    fn get_attribute(&self, handle: Handle) -> &dyn Attribute;
-
-    /// See [`AttributeStore::set_attribute`]
-    fn set_attribute(&mut self, handle: Handle, value: Box<dyn Any>) -> Result<(), Box<dyn Error>>;
-}
-
-impl<T: AttributeStore> GenericAttributeStore for T {
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn iter_handles(&self) -> HandleIterator {
-        self.iter_handles()
-    }
-
-    fn remove_attribute(&mut self, handle: Handle) {
-        self.remove_attribute(handle);
-    }
-
-    fn get_attribute(&self, handle: Handle) -> &dyn Attribute {
-        self.get_attribute(handle)
-    }
-
-    fn set_attribute(&mut self, handle: Handle, value: Box<dyn Any>) -> Result<(), Box<dyn Error>> {
-        let value_name = value.as_ref().type_id();
-
-        match value.downcast::<T::StoredAttribute>() {
-            Err(_) => Err(basic_error!(
-                "Expected attribute of type {} but got {:?}",
-                type_name::<T>(),
-                value_name
-            )),
-            Ok(value) => self.set_attribute(handle, *value),
-        }
-    }
-}
 
 /// A collection of entities where each entity is made up one or more Attributes
 #[derive(Debug, Default)]
 pub struct Universe {
     id_map: AttributeIdMap,
     entities: HashMap<Handle, EntitySignature>,
-    stores: HashMap<AttributeId, Box<dyn GenericAttributeStore>>,
+    stores: HashMap<AttributeId, Box<dyn AttributeStore>>,
 }
 
 impl Universe {
@@ -163,10 +110,10 @@ impl Universe {
         self.get_signature_mut(&handle)?.add(attribute_id);
 
         self.stores.entry(attribute_id)
-            .or_insert_with(|| Box::new(DefaultAttributeStore::<T>::default()));
+            .or_insert_with(|| value.create_store());
 
         let store = self.stores.get_mut(&attribute_id).unwrap();
-        store.set_attribute(handle, Box::new(value))
+        store.set_attribute(handle, BoxedAttribute::new(value))
     }
 
     /// Remove an attribute from an entity
@@ -307,17 +254,6 @@ impl Universe {
         })
     }
 
-    /// Set the structure used to store a specific type of attribute
-    ///
-    /// The store must be set before any attributes of its StoredAttribute type have been added to the Universe
-    #[inline]
-    pub fn set_attribute_store<S: AttributeStore>(&mut self, store: S) {
-        let attribute_id = self.id_map.get_or_assign_id::<S::StoredAttribute>();
-        assert_eq!(store.len(), 0);
-        assert!(!self.stores.contains_key(&attribute_id));
-        self.stores.insert(attribute_id, Box::new(store));
-    }
-
     /// Preform an optimized lookup for a specific attribute
     #[inline]
     pub fn query_handle<'iter, Q: Query>(
@@ -333,7 +269,7 @@ impl Universe {
         let store = self.stores.get(&attribute_id).unwrap();
         let store: &Q::Store = store.as_ref()
             .downcast_ref()
-            .ok_or(basic_error!("Query expects the store to be {} but it was {}.  Did you forget to call set_attribute_store?",
+            .ok_or(basic_error!("Query expects the store to be {} but it was {}.",
                 type_name::<Q::Store>(), store.as_ref().type_name()))?;
 
         Ok(query.query(store))
@@ -366,7 +302,7 @@ impl Universe {
         let store = self.stores.get(&attribute_id).unwrap();
         let store: &Q::Store = store.as_ref()
             .downcast_ref()
-            .ok_or(basic_error!("Query one expects the store to be {} but it was {}.  Did you forget to call set_attribute_store?",
+            .ok_or(basic_error!("Query one expects the store to be {} but it was {}.",
                 type_name::<Q::Store>(), store.as_ref().type_name()))
             .unwrap();
 
@@ -813,23 +749,32 @@ mod test {
         assert_eq!(attributes.len(), 2);
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    struct CustomStoreAttribute(u32);
+
+    impl Attribute for CustomStoreAttribute {
+        fn create_store(&self) -> Box<dyn AttributeStore> where Self: Sized {
+            Box::new(TestStore::default())
+        }
+    }
+
     #[derive(Debug, Default)]
     struct TestStore {
-        handle_to_value: HashMap<Handle, DummyAttribute>,
+        handle_to_value: HashMap<Handle, CustomStoreAttribute>,
     }
 
     impl AttributeStore for TestStore {
-        type StoredAttribute = DummyAttribute;
-
-        fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute {
+        fn get_attribute(&self, handle: Handle) -> &dyn Attribute {
             self.handle_to_value.get(&handle).unwrap()
         }
 
         fn set_attribute(
             &mut self,
             handle: Handle,
-            value: Self::StoredAttribute,
+            value: BoxedAttribute,
         ) -> Result<(), Box<dyn Error>> {
+            let value: CustomStoreAttribute = value.downcast()?;
+
             if value.0 > 10 {
                 Err(basic_error!("Value must not be more than 10"))
             } else {
@@ -854,7 +799,7 @@ mod test {
     struct LessThan(u32);
 
     impl Query for LessThan {
-        type StoredAttribute = DummyAttribute;
+        type StoredAttribute = CustomStoreAttribute;
         type Store = TestStore;
 
         fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter> {
@@ -871,7 +816,7 @@ mod test {
     struct FindOne(u32);
 
     impl QueryOne for FindOne {
-        type StoredAttribute = DummyAttribute;
+        type StoredAttribute = CustomStoreAttribute;
         type Store = TestStore;
 
         fn query_one(&self, store: &Self::Store) -> Option<Handle> {
@@ -884,39 +829,36 @@ mod test {
     #[test]
     fn custom_store_test() {
         let mut universe = Universe::default();
-        universe.set_attribute_store(TestStore::default());
 
-        universe.add_entity().set(DummyAttribute(3)).unwrap();
-        universe.add_entity().set(DummyAttribute(7)).unwrap();
+        universe.add_entity().set(CustomStoreAttribute(3)).unwrap();
+        universe.add_entity().set(CustomStoreAttribute(7)).unwrap();
 
-        let matches: Vec<&DummyAttribute> = universe
+        let matches: Vec<&CustomStoreAttribute> = universe
             .query(&LessThan(5))
             .unwrap()
             .map(|entity| entity.get().unwrap())
             .collect();
 
-        assert_eq!(matches, vec![&DummyAttribute(3)]);
+        assert_eq!(matches, vec![&CustomStoreAttribute(3)]);
     }
 
     #[test]
     fn custom_store_rejects_attributes() {
         let mut universe = Universe::default();
-        universe.set_attribute_store(TestStore::default());
 
-        let result = universe.add_entity().set(DummyAttribute(11)).as_result();
+        let result = universe.add_entity().set(CustomStoreAttribute(11)).as_result();
         assert!(result.is_err());
     }
 
     #[test]
     fn custom_store_find_one() {
         let mut universe = Universe::default();
-        universe.set_attribute_store(TestStore::default());
 
-        universe.add_entity().set(DummyAttribute(3)).unwrap();
-        universe.add_entity().set(DummyAttribute(7)).unwrap();
+        universe.add_entity().set(CustomStoreAttribute(3)).unwrap();
+        universe.add_entity().set(CustomStoreAttribute(7)).unwrap();
 
         let found = universe.query_one(FindOne(3)).unwrap();
-        assert_eq!(*found.get::<DummyAttribute>().unwrap(), DummyAttribute(3));
+        assert_eq!(*found.get::<CustomStoreAttribute>().unwrap(), CustomStoreAttribute(3));
 
         assert!(universe.query_one(FindOne(1)).is_none());
     }

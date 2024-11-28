@@ -4,7 +4,9 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use super::Attribute;
+use as_any::AsAny;
+
+use super::{attribute::BoxedAttribute, Attribute};
 
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
@@ -46,9 +48,7 @@ impl<'iter> Iterator for HandleIterator<'iter> {
     }
 }
 
-pub trait AttributeStore: std::fmt::Debug + 'static {
-    type StoredAttribute: Attribute;
-
+pub trait AttributeStore: std::fmt::Debug + AsAny {
     /// Get the number of attributes stored by this store
     fn len(&self) -> usize;
 
@@ -66,14 +66,10 @@ pub trait AttributeStore: std::fmt::Debug + 'static {
     /// Get the attribute assosiated with this handle as a generic attribute
     ///
     /// If the handle does not have an attribute assosiated with it it will panic
-    fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute;
+    fn get_attribute(&self, handle: Handle) -> &dyn Attribute;
 
     /// Set the attribute assosiated with this handle
-    fn set_attribute(
-        &mut self,
-        handle: Handle,
-        value: Self::StoredAttribute,
-    ) -> Result<(), Box<dyn Error>>;
+    fn set_attribute(&mut self, handle: Handle, value: BoxedAttribute) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Debug)]
@@ -90,8 +86,6 @@ impl<T: Attribute> Default for DefaultAttributeStore<T> {
 }
 
 impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
-    type StoredAttribute = T;
-
     fn len(&self) -> usize {
         self.values.len()
     }
@@ -100,7 +94,7 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
         HandleIterator::new(self.values.keys().cloned())
     }
 
-    fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute {
+    fn get_attribute(&self, handle: Handle) -> &dyn Attribute {
         self.values.get(&handle).unwrap()
     }
 
@@ -111,9 +105,9 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
     fn set_attribute(
         &mut self,
         handle: Handle,
-        value: Self::StoredAttribute,
+        value: BoxedAttribute,
     ) -> Result<(), Box<dyn Error>> {
-        self.values.insert(handle, value);
+        self.values.insert(handle, value.downcast()?);
         Ok(())
     }
 }
@@ -123,7 +117,7 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
 /// [EntityRef]: crate::rules::infrastructure::ecs::EntityRef
 pub trait Query {
     type StoredAttribute: Attribute;
-    type Store: AttributeStore<StoredAttribute = Self::StoredAttribute> + Sized;
+    type Store: AttributeStore + Sized;
 
     fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter>;
 }
@@ -133,7 +127,7 @@ pub trait Query {
 /// [EntityRef]: crate::rules::infrastructure::ecs::EntityRef
 pub trait QueryOne {
     type StoredAttribute: Attribute;
-    type Store: AttributeStore<StoredAttribute = Self::StoredAttribute> + Sized;
+    type Store: AttributeStore + Sized;
 
     fn query_one(&self, store: &Self::Store) -> Option<Handle>;
 }

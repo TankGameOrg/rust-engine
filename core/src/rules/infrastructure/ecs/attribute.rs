@@ -1,7 +1,17 @@
+use std::{any::{type_name, Any}, error::Error};
+
 use as_any::AsAny;
 
+use crate::basic_error;
+
+use super::{store::DefaultAttributeStore, AttributeStore};
+
 /// The common ancestor for all attribute values
-pub trait Attribute: std::fmt::Debug + Send + Sync + AsAny {}
+pub trait Attribute: std::fmt::Debug + Send + Sync + AsAny {
+    fn create_store(&self) -> Box<dyn AttributeStore> where Self: Sized {
+        Box::new(DefaultAttributeStore::<Self>::default())
+    }
+}
 
 // A basic attribute for writing unit tests
 #[cfg(test)]
@@ -10,3 +20,25 @@ pub struct DummyAttribute(pub u32);
 
 #[cfg(test)]
 impl Attribute for DummyAttribute {}
+
+/// Like `Box<dyn Attribute>` except you can downcast and take ownership of the concrete attribute
+pub struct BoxedAttribute(Box<dyn Any>);
+
+impl BoxedAttribute {
+    pub fn new(attribute: impl Attribute) -> BoxedAttribute {
+        BoxedAttribute(Box::new(attribute))
+    }
+
+    pub fn downcast<T: Attribute>(self) -> Result<T, Box<dyn Error>> {
+        let value_name = self.0.as_ref().type_id();
+
+        match self.0.downcast() {
+            Err(_) => Err(basic_error!(
+                "Expected attribute of type {} but got {:?}",
+                type_name::<T>(),
+                value_name
+            )),
+            Ok(value) => Ok(*value),
+        }
+    }
+}
