@@ -70,5 +70,5 @@ mod universe;
 
 pub use attribute::Attribute;
 pub use signature::Signature;
-pub use store::{AttributeStore, Handle, HandleIterator, Query};
+pub use store::{AttributeStore, Handle, HandleIterator, Query, QueryOne};
 pub use universe::{AttributeIter, EntityBuilder, EntityMut, EntityRef, Universe};

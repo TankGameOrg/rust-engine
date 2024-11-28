@@ -118,9 +118,22 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
     }
 }
 
+/// A type that can be used to find zero or more [EntityRef] in a Universe based on exactly one of their attributes
+/// 
+/// [EntityRef]: crate::rules::infrastructure::ecs::EntityRef
 pub trait Query {
     type StoredAttribute: Attribute;
     type Store: AttributeStore<StoredAttribute = Self::StoredAttribute> + Sized;
 
     fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter>;
+}
+
+/// A type that can be used to find zero or one [EntityRef] in a Universe based on exactly one of their attributes 
+/// 
+/// [EntityRef]: crate::rules::infrastructure::ecs::EntityRef
+pub trait QueryOne {
+    type StoredAttribute: Attribute;
+    type Store: AttributeStore<StoredAttribute = Self::StoredAttribute> + Sized;
+
+    fn query_one(&self, store: &Self::Store) -> Option<Handle>;
 }

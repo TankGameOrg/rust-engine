@@ -12,7 +12,7 @@ use super::{
     attribute::Attribute,
     signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature},
     store::{AttributeStore, DefaultAttributeStore, Handle, HandleIterator},
-    Query,
+    Query, QueryOne,
 };
 
 /// The internal, object safe interface for storing attributes without knowing the underlying implementation
@@ -349,6 +349,41 @@ impl Universe {
             universe: self,
             handle,
         }))
+    }
+
+    /// Preform an optimized lookup for a specific attribute
+    #[inline]
+    pub fn query_one_handle<Q: QueryOne>(
+        &self,
+        query: Q,
+    ) -> Option<Handle> {
+        let attribute_id = self.id_map.get_id::<Q::StoredAttribute>();
+        if attribute_id.is_none() {
+            return None;
+        }
+
+        let attribute_id = attribute_id.unwrap();
+        let store = self.stores.get(&attribute_id).unwrap();
+        let store: &Q::Store = store.as_ref()
+            .downcast_ref()
+            .ok_or(basic_error!("Query one expects the store to be {} but it was {}.  Did you forget to call set_attribute_store?",
+                type_name::<Q::Store>(), store.as_ref().type_name()))
+            .unwrap();
+
+        query.query_one(store)
+    }
+
+    /// Preform an optimized lookup for a specific attribute
+    #[inline]
+    pub fn query_one<Q: QueryOne>(
+        &self,
+        query: Q,
+    ) -> Option<EntityRef> {
+        self.query_one_handle(query)
+            .map(|handle| EntityRef {
+                universe: self,
+                handle,
+            })
     }
 }
 
@@ -833,6 +868,19 @@ mod test {
         }
     }
 
+    struct FindOne(u32);
+
+    impl QueryOne for FindOne {
+        type StoredAttribute = DummyAttribute;
+        type Store = TestStore;
+
+        fn query_one(&self, store: &Self::Store) -> Option<Handle> {
+            store.handle_to_value.iter()
+                .find(|(_, value)| value.0 == self.0)
+                .map(|(handle, _)| *handle)
+        }
+    }
+
     #[test]
     fn custom_store_test() {
         let mut universe = Universe::default();
@@ -857,5 +905,19 @@ mod test {
 
         let result = universe.add_entity().set(DummyAttribute(11)).as_result();
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn custom_store_find_one() {
+        let mut universe = Universe::default();
+        universe.set_attribute_store(TestStore::default());
+
+        universe.add_entity().set(DummyAttribute(3)).unwrap();
+        universe.add_entity().set(DummyAttribute(7)).unwrap();
+
+        let found = universe.query_one(FindOne(3)).unwrap();
+        assert_eq!(*found.get::<DummyAttribute>().unwrap(), DummyAttribute(3));
+
+        assert!(universe.query_one(FindOne(1)).is_none());
     }
 }
