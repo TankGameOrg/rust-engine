@@ -276,7 +276,7 @@ impl Universe {
         &self,
         signature: Signature,
     ) -> impl Iterator<Item = Handle> + '_ {
-        let mut handle_iter = HandleIterator::new(self.entities.keys());
+        let mut handle_iter = HandleIterator::new(self.entities.keys().cloned());
         let mut length = self.entities.len();
 
         for attribute_id in signature.iter_included(&self.id_map) {
@@ -863,7 +863,7 @@ mod test {
                     .handle_to_value
                     .iter()
                     .filter(|(_, value)| value.0 < self.0)
-                    .map(|(handle, _)| handle),
+                    .map(|(handle, _)| *handle),
             )
         }
     }

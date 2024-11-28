@@ -27,9 +27,9 @@ pub struct HandleIterator<'iter> {
 }
 
 impl<'iter> HandleIterator<'iter> {
-    pub fn new(iter: impl Iterator<Item = &'iter Handle> + 'iter) -> HandleIterator<'iter> {
+    pub fn new(iter: impl Iterator<Item = Handle> + 'iter) -> HandleIterator<'iter> {
         HandleIterator {
-            iter: Some(Box::new(iter.cloned())),
+            iter: Some(Box::new(iter)),
         }
     }
 
@@ -97,7 +97,7 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
     }
 
     fn iter_handles(&self) -> HandleIterator {
-        HandleIterator::new(self.values.keys())
+        HandleIterator::new(self.values.keys().cloned())
     }
 
     fn get_attribute(&self, handle: Handle) -> &Self::StoredAttribute {
