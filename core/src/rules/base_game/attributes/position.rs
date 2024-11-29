@@ -500,4 +500,51 @@ mod test {
             RectangleQuery::centered_at(Position::new(Level::Floor, 4, 2), 4),
             vec![handle_0_0_floor]);
     }
+
+    #[test]
+    fn out_of_bounds_rectangle_position_iter() {
+        let bounds = Bounds::new(3, 7);
+        let rect = RectangleQuery::centered_at(Position::new(Level::Unit, 1, 5), 2);
+
+        let collected: HashSet<Position> = RectanglePositionIterator::new(&bounds, &rect).collect();
+        assert_eq!(collected, vec![
+            Position::new(Level::Unit, 0, 3),
+            Position::new(Level::Unit, 0, 4),
+            Position::new(Level::Unit, 0, 5),
+            Position::new(Level::Unit, 0, 6),
+            Position::new(Level::Unit, 1, 3),
+            Position::new(Level::Unit, 1, 4),
+            Position::new(Level::Unit, 1, 5),
+            Position::new(Level::Unit, 1, 6),
+            Position::new(Level::Unit, 2, 3),
+            Position::new(Level::Unit, 2, 4),
+            Position::new(Level::Unit, 2, 5),
+            Position::new(Level::Unit, 2, 6),
+        ].into_iter().collect());
+    }
+
+    #[test]
+    fn iterate_multiple_levels() {
+        let bounds = Bounds::new(5, 5);
+        let rect = RectangleQuery::default()
+            .bottom_right(2, 1)
+            .level(Level::Unit)
+            .level(Level::Floor);
+
+        let collected: HashSet<Position> = RectanglePositionIterator::new(&bounds, &rect).collect();
+        assert_eq!(collected, vec![
+            Position::new(Level::Unit, 0, 0),
+            Position::new(Level::Unit, 0, 1),
+            Position::new(Level::Unit, 1, 0),
+            Position::new(Level::Unit, 1, 1),
+            Position::new(Level::Unit, 2, 0),
+            Position::new(Level::Unit, 2, 1),
+            Position::new(Level::Floor, 0, 0),
+            Position::new(Level::Floor, 0, 1),
+            Position::new(Level::Floor, 1, 0),
+            Position::new(Level::Floor, 1, 1),
+            Position::new(Level::Floor, 2, 0),
+            Position::new(Level::Floor, 2, 1),
+        ].into_iter().collect());
+    }
 }
