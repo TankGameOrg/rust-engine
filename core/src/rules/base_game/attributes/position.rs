@@ -1,5 +1,7 @@
 use std::{cmp::min, collections::HashMap, error::Error};
 
+use as_any::Downcast;
+
 use crate::{basic_error, rules::infrastructure::ecs::{Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Properties, Property, Query, QueryOne}};
 
 /// The part of the floor space that this entity occupies i.e. Floor
@@ -12,6 +14,15 @@ pub enum Level {
 const NUM_LEVELS: usize = 2;
 
 /// The position of an entity in 3d space
+/// 
+/// [`Position`] can be used as both an [`Attribute`] and a [`QueryOne`].
+/// 
+/// As an [`Attribute`] it specifys the space that an entity is in
+/// As a [`QueryOne`] it will lookup the entity in that space
+/// 
+/// Only one entity can be in a [`Position`] at a time
+/// 
+/// [`Universe::find_one`]: crate::rules::infrastructure::ecs::Universe::find_one
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub struct Position {
     x: usize,
@@ -55,9 +66,10 @@ impl Attribute for Position {
 
 impl QueryOne for Position {
     type StoredAttribute = Position;
-    type Store = Board;
 
-    fn query_one(&self, store: &Self::Store) -> Option<Handle> {
+    fn query_one(&self, store: &dyn AttributeStore) -> Option<Handle> {
+        let store: &Board = store.downcast_ref().unwrap();
+
         match store.get_index(self) {
             Ok(index) => store.board[index],
             Err(_) => None,
@@ -67,7 +79,7 @@ impl QueryOne for Position {
 
 /// The dimensions of the game board
 /// 
-/// Bounds vs Board: The Bounds know the width and height and can find all of the [`Position`]s in or around an area.  But it
+/// The Bounds know the width and height and can find all of the [`Position`]s in or around an area.  But it
 /// doesn't know where the actual [`Entities`] are located.  The board can tell you what [`Entities`] are in an area but it can't tell
 /// you about unoccupied spaces in that area.
 /// 
@@ -116,7 +128,13 @@ impl Bounds {
     }
 }
 
-/// A rectangular area that spans one or more [`Level`]s that can be used to find [`Position`]s or Entities in that area
+/// A rectangular area that spans one or more [`Level`]s that can be used to search the area it describes
+/// 
+/// Give this to the [`RectanglePositionIterator`] to find all in bounds Positions within the space decribed
+/// Give this to [`Universe::find`] to find all of the [`Entities`] within the space described
+/// 
+/// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
+/// [`Universe::find`]: crate::rules::infrastructure::ecs::Universe::find
 #[derive(Debug, Default)]
 pub struct RectangleQuery {
     levels: Vec<Level>,
@@ -253,15 +271,8 @@ impl<'iter> Iterator for RectanglePositionIterator<'iter> {
 }
 
 /// An [`AttributeStore`] that manages the [`Position`]s of [`Entities`].
-/// 
-/// Clients should not use this directly if you want to find an entity call [`Universe::find`]
-/// with a [`RectangleQuery`] or [`Universe::find_one`] with a [`Position`].
-/// 
-/// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
-/// [`Universe::find`]: crate::rules::infrastructure::ecs::Universe::find
-/// [`Universe::find_one`]: crate::rules::infrastructure::ecs::Universe::find_one
 #[derive(Debug)]
-pub struct Board {
+struct Board {
     bounds: Bounds,
     board: Vec<Option<Handle>>,
     reverse_lookups: HashMap<Handle, Position>,
@@ -338,9 +349,10 @@ impl AttributeStore for Board {
 
 impl Query for RectangleQuery {
     type StoredAttribute = Position;
-    type Store = Board;
 
-    fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter> {
+    fn query<'iter>(&'iter self, store: &'iter dyn AttributeStore) -> HandleIterator<'iter> {
+        let store: &Board = store.downcast_ref().unwrap();
+
         HandleIterator::new(
             RectanglePositionIterator::new(&store.bounds, self)
                 .map(|position| store.get_from_position(&position))

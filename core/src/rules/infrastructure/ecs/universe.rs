@@ -1,5 +1,5 @@
 use std::{
-    any::{self, type_name},
+    any::type_name,
     collections::HashMap,
     error::Error,
 };
@@ -91,7 +91,7 @@ impl Universe {
             .downcast_ref()
             .ok_or(basic_error!(
                 "Got the wrong type when reading {} from {:?}",
-                any::type_name::<T>(),
+                type_name::<T>(),
                 handle
             ))
     }
@@ -265,12 +265,7 @@ impl Universe {
 
         let attribute_id = attribute_id.unwrap();
         let store = self.stores.get(&attribute_id).unwrap();
-        let store: &Q::Store = store.as_ref()
-            .downcast_ref()
-            .ok_or(basic_error!("Query expects the store to be {} but it was {}.",
-                type_name::<Q::Store>(), store.as_ref().type_name()))?;
-
-        Ok(query.query(store))
+        Ok(query.query(store.as_ref()))
     }
 
     /// Preform an optimized lookup for a specific attribute
@@ -298,13 +293,7 @@ impl Universe {
 
         let attribute_id = attribute_id.unwrap();
         let store = self.stores.get(&attribute_id).unwrap();
-        let store: &Q::Store = store.as_ref()
-            .downcast_ref()
-            .ok_or(basic_error!("Query one expects the store to be {} but it was {}.",
-                type_name::<Q::Store>(), store.as_ref().type_name()))
-            .unwrap();
-
-        query.query_one(store)
+        query.query_one(store.as_ref())
     }
 
     /// Preform an optimized lookup for a specific attribute
@@ -647,9 +636,7 @@ impl<'universe, 'iter: 'universe> IntoIterator for &'iter EntityMut<'universe> {
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashSet;
-
-    use any::TypeId;
+    use std::{any::TypeId, collections::HashSet};
 
     use crate::{rules::infrastructure::ecs::attribute::DummyAttribute, signature};
 
@@ -810,9 +797,10 @@ mod test {
 
     impl Query for LessThan {
         type StoredAttribute = CustomStoreAttribute;
-        type Store = TestStore;
 
-        fn query<'iter>(&'iter self, store: &'iter Self::Store) -> HandleIterator<'iter> {
+        fn query<'iter>(&'iter self, store: &'iter dyn AttributeStore) -> HandleIterator<'iter> {
+            let store: &TestStore = store.downcast_ref().unwrap();
+
             HandleIterator::new(
                 store
                     .handle_to_value
@@ -827,9 +815,10 @@ mod test {
 
     impl QueryOne for FindOne {
         type StoredAttribute = CustomStoreAttribute;
-        type Store = TestStore;
 
-        fn query_one(&self, store: &Self::Store) -> Option<Handle> {
+        fn query_one(&self, store: &dyn AttributeStore) -> Option<Handle> {
+            let store: &TestStore = store.downcast_ref().unwrap();
+
             store.handle_to_value.iter()
                 .find(|(_, value)| value.0 == self.0)
                 .map(|(handle, _)| *handle)
