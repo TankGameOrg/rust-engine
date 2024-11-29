@@ -2,14 +2,16 @@ use std::{cmp::min, collections::HashMap, error::Error};
 
 use crate::{basic_error, rules::infrastructure::ecs::{Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Properties, Property, Query, QueryOne}};
 
+/// The part of the floor space that this entity occupies i.e. Floor
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub enum Level {
-    Unit,
     Floor,
+    Unit,
 }
 
 const NUM_LEVELS: usize = 2;
 
+/// The position of an entity in 3d space
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub struct Position {
     x: usize,
@@ -24,6 +26,23 @@ impl Position {
             x,
             y,
         }
+    }
+}
+
+impl Position {
+    #[inline]
+    pub fn get_level(&self) -> Level {
+        self.level
+    }
+
+    #[inline]
+    pub fn get_x(&self) -> usize {
+        self.x
+    }
+
+    #[inline]
+    pub fn get_y(&self) -> usize {
+        self.y
     }
 }
 
@@ -46,6 +65,13 @@ impl QueryOne for Position {
     }
 }
 
+/// The dimensions of the game board
+/// 
+/// Bounds vs Board: The Bounds know the width and height and can find all of the [`Position`]s in or around an area.  But it
+/// doesn't know where the actual [`Entities`] are located.  The board can tell you what [`Entities`] are in an area but it can't tell
+/// you about unoccupied spaces in that area.
+/// 
+/// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
 #[derive(Debug, Clone)]
 pub struct Bounds {
     width: usize,
@@ -73,11 +99,13 @@ impl Bounds {
         self.height
     }
 
+    /// Check if a position is in bounds
     #[inline]
     pub fn is_valid(&self, position: &Position) -> bool {
         position.x >= self.width || position.y >= self.height
     }
 
+    /// Return an error if a position is out of bounds
     #[inline]
     pub fn verify_position(&self, position: &Position) -> Result<(), Box<dyn Error>> {
         if self.is_valid(position) {
@@ -88,6 +116,7 @@ impl Bounds {
     }
 }
 
+/// A rectangular area that spans one or more [`Level`]s that can be used to find [`Position`]s or Entities in that area
 #[derive(Debug, Default)]
 pub struct RectangleQuery {
     levels: Vec<Level>,
@@ -141,7 +170,8 @@ enum IteratorState {
     Active(Position),
 }
 
-struct RectanglePositionIterator<'iter> {
+/// An iterator that can iterate all of the in bounds spaces in a [`RectangleQuery`]
+pub struct RectanglePositionIterator<'iter> {
     bounds: &'iter Bounds,
     query: &'iter RectangleQuery,
     state: IteratorState,
@@ -222,7 +252,14 @@ impl<'iter> Iterator for RectanglePositionIterator<'iter> {
     }
 }
 
-
+/// An [`AttributeStore`] that manages the [`Position`]s of [`Entities`].
+/// 
+/// Clients should not use this directly if you want to find an entity call [`Universe::find`]
+/// with a [`RectangleQuery`] or [`Universe::find_one`] with a [`Position`].
+/// 
+/// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
+/// [`Universe::find`]: crate::rules::infrastructure::ecs::Universe::find
+/// [`Universe::find_one`]: crate::rules::infrastructure::ecs::Universe::find_one
 #[derive(Debug)]
 pub struct Board {
     bounds: Bounds,
@@ -232,7 +269,7 @@ pub struct Board {
 
 impl Board {
     #[inline]
-    pub fn new(bounds: Bounds) -> Board {
+    fn new(bounds: Bounds) -> Board {
         Board {
             board: vec![None; NUM_LEVELS * bounds.get_width() * bounds.get_height()],
             bounds,
@@ -337,13 +374,13 @@ mod test {
             .as_handle()
             .unwrap();
 
-        let gathered: Vec<EntityRef> = universe.gather(signature!(Position)).collect();
-        assert_eq!(gathered.len(), 3);
+        let found: Vec<EntityRef> = universe.find_signature(signature!(Position)).collect();
+        assert_eq!(found.len(), 3);
 
         universe.get_entity_mut(handle).unwrap().remove::<Position>();
 
-        let gathered: Vec<EntityRef> = universe.gather(signature!(Position)).collect();
-        assert_eq!(gathered.len(), 2);
+        let found: Vec<EntityRef> = universe.find_signature(signature!(Position)).collect();
+        assert_eq!(found.len(), 2);
     }
 
     #[test]
@@ -403,14 +440,14 @@ mod test {
             .as_handle()
             .unwrap();
 
-        let found_entity = universe.query_one(position.clone()).unwrap();
+        let found_entity = universe.find_one(position.clone()).unwrap();
         assert_eq!(found_entity.get_handle(), expected_handle);
 
-        assert!(universe.query_one(Position::new(Level::Floor, 2, 2)).is_none());
+        assert!(universe.find_one(Position::new(Level::Floor, 2, 2)).is_none());
     }
 
     fn verify_query(universe: &Universe, query: impl Query, expected: Vec<Handle>) {
-        let found: HashSet<Handle> = universe.query(&query)
+        let found: HashSet<Handle> = universe.find(&query)
             .unwrap()
             .map(|entity| entity.get_handle())
             .collect();

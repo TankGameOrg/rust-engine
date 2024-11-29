@@ -217,7 +217,7 @@ impl Universe {
     }
 
     /// Collect the handles for all entities in the universe that match the specified signature
-    pub fn gather_handles(
+    fn find_signature_handles(
         &self,
         signature: Signature,
     ) -> impl Iterator<Item = Handle> + '_ {
@@ -242,11 +242,11 @@ impl Universe {
 
     /// Collect the all of the entities in the universe that match the specified signature
     #[inline]
-    pub fn gather(
+    pub fn find_signature(
         &self,
         signature: Signature,
     ) -> impl Iterator<Item = EntityRef> {
-        self.gather_handles(signature).map(|handle| EntityRef {
+        self.find_signature_handles(signature).map(|handle| EntityRef {
             universe: self,
             handle,
         })
@@ -254,7 +254,7 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn query_handle<'iter, Q: Query>(
+    fn find_handles<'iter, Q: Query>(
         &'iter self,
         query: &'iter Q,
     ) -> Result<impl Iterator<Item = Handle> + 'iter, Box<dyn Error>> {
@@ -275,11 +275,11 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn query<'iter, Q: Query>(
+    pub fn find<'iter, Q: Query>(
         &'iter self,
         query: &'iter Q,
     ) -> Result<impl Iterator<Item = EntityRef> + 'iter, Box<dyn Error>> {
-        Ok(self.query_handle(query)?.map(|handle| EntityRef {
+        Ok(self.find_handles(query)?.map(|handle| EntityRef {
             universe: self,
             handle,
         }))
@@ -287,7 +287,7 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn query_one_handle<Q: QueryOne>(
+    fn find_one_handle<Q: QueryOne>(
         &self,
         query: Q,
     ) -> Option<Handle> {
@@ -309,11 +309,11 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn query_one<Q: QueryOne>(
+    pub fn find_one<Q: QueryOne>(
         &self,
         query: Q,
     ) -> Option<EntityRef> {
-        self.query_one_handle(query)
+        self.find_one_handle(query)
             .map(|handle| EntityRef {
                 universe: self,
                 handle,
@@ -685,7 +685,7 @@ mod test {
     struct DummyAttribute2;
     impl Attribute for DummyAttribute2 {}
 
-    fn make_gather_universe() -> (Universe, Handle, Handle) {
+    fn make_find_universe() -> (Universe, Handle, Handle) {
         let mut universe = Universe::default();
         let first_handle = universe
             .add_entity()
@@ -706,20 +706,20 @@ mod test {
     }
 
     #[test]
-    fn can_gather_handles() {
-        let (universe, first_handle, second_handle) = make_gather_universe();
+    fn can_find_handles() {
+        let (universe, first_handle, second_handle) = make_find_universe();
 
-        // Gather one of the entities
+        // Find one of the entities
         let one: Vec<Handle> = universe
-            .gather_handles(signature!(DummyAttribute2))
+            .find_signature_handles(signature!(DummyAttribute2))
             .collect();
 
         assert_eq!(one.len(), 1);
         assert_eq!(one[0], second_handle);
 
-        // Gather both of the ones with attributes
+        // Find both of the ones with attributes
         let two: Vec<Handle> = universe
-            .gather_handles(signature!(DummyAttribute))
+            .find_signature_handles(signature!(DummyAttribute))
             .collect();
 
         assert_eq!(two.len(), 2);
@@ -728,11 +728,11 @@ mod test {
     }
 
     #[test]
-    fn can_gather_entities() {
-        let (universe, _, _) = make_gather_universe();
+    fn can_find_entities() {
+        let (universe, _, _) = make_find_universe();
 
         let dummy_total = universe
-            .gather(signature!(DummyAttribute))
+            .find_signature(signature!(DummyAttribute))
             .map(|entity| entity.get::<DummyAttribute>().unwrap().0)
             .reduce(|a, b| a + b);
 
@@ -844,7 +844,7 @@ mod test {
         universe.add_entity().set(CustomStoreAttribute(7)).unwrap();
 
         let matches: Vec<&CustomStoreAttribute> = universe
-            .query(&LessThan(5))
+            .find(&LessThan(5))
             .unwrap()
             .map(|entity| entity.get().unwrap())
             .collect();
@@ -867,9 +867,9 @@ mod test {
         universe.add_entity().set(CustomStoreAttribute(3)).unwrap();
         universe.add_entity().set(CustomStoreAttribute(7)).unwrap();
 
-        let found = universe.query_one(FindOne(3)).unwrap();
+        let found = universe.find_one(FindOne(3)).unwrap();
         assert_eq!(*found.get::<CustomStoreAttribute>().unwrap(), CustomStoreAttribute(3));
 
-        assert!(universe.query_one(FindOne(1)).is_none());
+        assert!(universe.find_one(FindOne(1)).is_none());
     }
 }

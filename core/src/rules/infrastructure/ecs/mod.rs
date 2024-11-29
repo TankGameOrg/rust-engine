@@ -12,7 +12,7 @@
 //! impl Attribute for Health {}
 //!
 //! fn damage_living(universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-//!     let living: Vec<(Handle, u32)> = universe.gather(signature!(Health))
+//!     let living: Vec<(Handle, u32)> = universe.find_signature(signature!(Health))
 //!         .filter(|entity| entity.get::<Health>().unwrap().0 > 0)
 //!         .map(|entity| (entity.get_handle(), entity.get::<Health>().unwrap().0))
 //!         .collect();
@@ -25,7 +25,7 @@
 //! }
 //!
 //! fn remove_dead(universe: &mut Universe) -> Result<(), Box<dyn Error>> {
-//!     let dead: Vec<Handle> = universe.gather(signature!(Health))
+//!     let dead: Vec<Handle> = universe.find_signature(signature!(Health))
 //!         .filter(|entity| entity.get::<Health>().unwrap().0 == 0)
 //!         .map(|entity| entity.get_handle())
 //!         .collect();
