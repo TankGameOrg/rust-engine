@@ -11,6 +11,16 @@ pub trait Attribute: std::fmt::Debug + Send + Sync + AsAny {
     fn create_store(&self, _properties: &Properties) -> Box<dyn AttributeStore> where Self: Sized {
         Box::new(DefaultAttributeStore::<Self>::default())
     }
+
+    /// Get a human readable name for this attribute
+    fn get_display_name(&self) -> &'static str {
+        let resource_name= type_name::<Self>();
+        let start_index = resource_name.rfind(":")
+            .map(|index| index + 1)
+            .unwrap_or(0);
+
+        &resource_name[start_index..]
+    }
 }
 
 // A basic attribute for writing unit tests
