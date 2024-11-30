@@ -2,7 +2,13 @@ use std::{cmp::min, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
-use crate::{basic_error, rules::infrastructure::ecs::{Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Properties, Property, Query, QueryOne}};
+use crate::{
+    basic_error,
+    rules::infrastructure::ecs::{
+        Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Properties, Property,
+        Query, QueryOne,
+    },
+};
 
 /// The part of the floor space that this entity occupies i.e. Floor
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, PartialOrd, Ord)]
@@ -14,14 +20,14 @@ pub enum Level {
 const NUM_LEVELS: usize = 2;
 
 /// The position of an entity in 3d space
-/// 
+///
 /// [`Position`] can be used as both an [`Attribute`] and a [`QueryOne`].
-/// 
+///
 /// As an [`Attribute`] it specifys the space that an entity is in
 /// As a [`QueryOne`] it will lookup the entity in that space
-/// 
+///
 /// Only one entity can be in a [`Position`] at a time
-/// 
+///
 /// [`Universe::find_one`]: crate::rules::infrastructure::ecs::Universe::find_one
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Hash, PartialOrd, Ord)]
 pub struct Position {
@@ -32,11 +38,7 @@ pub struct Position {
 
 impl Position {
     pub fn new(level: Level, x: usize, y: usize) -> Position {
-        Position {
-            level,
-            x,
-            y,
-        }
+        Position { level, x, y }
     }
 }
 
@@ -58,8 +60,14 @@ impl Position {
 }
 
 impl Attribute for Position {
-    fn create_store(&self, properties: &Properties) -> Box<dyn AttributeStore> where Self: Sized {
-        assert!(properties.has::<Bounds>(), "The universe must have the Bounds property to use the Position attribute");
+    fn create_store(&self, properties: &Properties) -> Box<dyn AttributeStore>
+    where
+        Self: Sized,
+    {
+        assert!(
+            properties.has::<Bounds>(),
+            "The universe must have the Bounds property to use the Position attribute"
+        );
         Box::new(Board::new(properties.get::<Bounds>().unwrap().clone()))
     }
 }
@@ -78,11 +86,11 @@ impl QueryOne for Position {
 }
 
 /// The dimensions of the game board
-/// 
+///
 /// The Bounds know the width and height and can find all of the [`Position`]s in or around an area.  But it
 /// doesn't know where the actual [`Entities`] are located.  The board can tell you what [`Entities`] are in an area but it can't tell
 /// you about unoccupied spaces in that area.
-/// 
+///
 /// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
 #[derive(Debug, Clone)]
 pub struct Bounds {
@@ -95,10 +103,7 @@ impl Property for Bounds {}
 impl Bounds {
     #[inline]
     pub fn new(width: usize, height: usize) -> Bounds {
-        Bounds {
-            width,
-            height,
-        }
+        Bounds { width, height }
     }
 
     #[inline]
@@ -121,7 +126,12 @@ impl Bounds {
     #[inline]
     pub fn verify_position(&self, position: &Position) -> Result<(), Box<dyn Error>> {
         if self.is_valid(position) {
-            return Err(basic_error!("Position {:?} is outside the valid bounds ({}, {})", position, self.width, self.height))
+            return Err(basic_error!(
+                "Position {:?} is outside the valid bounds ({}, {})",
+                position,
+                self.width,
+                self.height
+            ));
         }
 
         Ok(())
@@ -129,10 +139,10 @@ impl Bounds {
 }
 
 /// A rectangular area that spans one or more [`Level`]s that can be used to search the area it describes
-/// 
+///
 /// Give this to the [`RectanglePositionIterator`] to find all in bounds Positions within the space decribed
 /// Give this to [`Universe::find`] to find all of the [`Entities`] within the space described
-/// 
+///
 /// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
 /// [`Universe::find`]: crate::rules::infrastructure::ecs::Universe::find
 #[derive(Debug, Default)]
@@ -167,8 +177,16 @@ impl RectangleQuery {
 
     /// Create a square where the top of the rectangle is radius away from the center (the same applies to all sides)
     pub fn centered_at(center: Position, radius: usize) -> Self {
-        let top_left_x = if center.x < radius { 0 } else { center.x - radius };
-        let top_left_y = if center.y < radius { 0 } else { center.y - radius };
+        let top_left_x = if center.x < radius {
+            0
+        } else {
+            center.x - radius
+        };
+        let top_left_y = if center.y < radius {
+            0
+        } else {
+            center.y - radius
+        };
 
         Self::default()
             .top_left(top_left_x, top_left_y)
@@ -227,39 +245,41 @@ impl<'iter> Iterator for RectanglePositionIterator<'iter> {
                 if current_position.x < self.get_bottom_right_x() {
                     current_position.x += 1;
                     IteratorState::Active(current_position)
-                }
-                else if current_position.y < self.get_bottom_right_y() {
+                } else if current_position.y < self.get_bottom_right_y() {
                     current_position.x = query.top_left_x;
                     current_position.y += 1;
                     IteratorState::Active(current_position)
-                }
-                else {
-                    let index = query.levels.iter()
+                } else {
+                    let index = query
+                        .levels
+                        .iter()
                         .position(|level| *level == current_position.level)
                         .unwrap();
 
                     if index + 1 == query.levels.len() {
                         IteratorState::Ended
-                    }
-                    else {
+                    } else {
                         current_position.x = query.top_left_x;
                         current_position.y = query.top_left_y;
                         current_position.level = query.levels[index + 1];
                         IteratorState::Active(current_position)
                     }
                 }
-            },
+            }
             IteratorState::New => {
-                if query.levels.is_empty() {
+                if query.levels.is_empty()
+                    || query.top_left_x > self.get_bottom_right_x()
+                    || query.top_left_y > self.get_bottom_right_y()
+                {
                     IteratorState::Ended
+                } else {
+                    IteratorState::Active(Position::new(
+                        query.levels[0],
+                        query.top_left_x,
+                        query.top_left_y,
+                    ))
                 }
-                else if query.top_left_x > self.get_bottom_right_x() || query.top_left_y > self.get_bottom_right_y() {
-                    IteratorState::Ended
-                }
-                else {
-                    IteratorState::Active(Position::new(query.levels[0], query.top_left_x, query.top_left_y))
-                }
-            },
+            }
             IteratorState::Ended => IteratorState::Ended,
         };
 
@@ -296,9 +316,11 @@ impl Board {
             Level::Floor => 1,
         };
 
-        Ok((floor_index * self.bounds.get_width() * self.bounds.get_height()) +
-            (position.y * self.bounds.get_width()) +
-            position.x)
+        Ok(
+            (floor_index * self.bounds.get_width() * self.bounds.get_height())
+                + (position.y * self.bounds.get_width())
+                + position.x,
+        )
     }
 
     fn get_from_position(&self, position: &Position) -> Option<Handle> {
@@ -312,8 +334,7 @@ impl AttributeStore for Board {
     }
 
     fn iter_handles(&self) -> HandleIterator {
-        HandleIterator::new(self.reverse_lookups.iter()
-            .map(|(handle, _)| *handle))
+        HandleIterator::new(self.reverse_lookups.keys().copied())
     }
 
     fn get_attribute(&self, handle: Handle) -> &dyn Attribute {
@@ -321,15 +342,19 @@ impl AttributeStore for Board {
     }
 
     fn set_attribute(
-            &mut self,
-            handle: Handle,
-            position: BoxedAttribute,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+        &mut self,
+        handle: Handle,
+        position: BoxedAttribute,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let position: Position = position.downcast()?;
         let index = self.get_index(&position)?;
 
         if let Some(occupying_handle) = self.board[index] {
-            return Err(basic_error!("The position {:?} is already occupied by {:?}", position, occupying_handle));
+            return Err(basic_error!(
+                "The position {:?} is already occupied by {:?}",
+                position,
+                occupying_handle
+            ));
         }
 
         self.remove_attribute(handle);
@@ -355,8 +380,7 @@ impl Query for RectangleQuery {
 
         HandleIterator::new(
             RectanglePositionIterator::new(&store.bounds, self)
-                .map(|position| store.get_from_position(&position))
-                .flatten()
+                .filter_map(|position| store.get_from_position(&position)),
         )
     }
 }
@@ -365,7 +389,10 @@ impl Query for RectangleQuery {
 mod test {
     use std::collections::HashSet;
 
-    use crate::{rules::infrastructure::ecs::{EntityRef, Universe}, signature};
+    use crate::{
+        rules::infrastructure::ecs::{EntityRef, Universe},
+        signature,
+    };
 
     use super::*;
 
@@ -381,15 +408,15 @@ mod test {
         universe.add_entity().set(position2).unwrap();
         universe.add_entity().set(position3).unwrap();
 
-        let handle = universe.add_entity()
-            .set(position1)
-            .as_handle()
-            .unwrap();
+        let handle = universe.add_entity().set(position1).as_handle().unwrap();
 
         let found: Vec<EntityRef> = universe.find_signature(signature!(Position)).collect();
         assert_eq!(found.len(), 3);
 
-        universe.get_entity_mut(handle).unwrap().remove::<Position>();
+        universe
+            .get_entity_mut(handle)
+            .unwrap()
+            .remove::<Position>();
 
         let found: Vec<EntityRef> = universe.find_signature(signature!(Position)).collect();
         assert_eq!(found.len(), 2);
@@ -401,25 +428,29 @@ mod test {
         universe.get_properties_mut().set(Bounds::new(5, 3));
 
         // Out of bounds
-        let result = universe.add_entity()
+        let result = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 1, 4))
             .as_result();
 
         assert!(result.is_err());
 
-        let result = universe.add_entity()
+        let result = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 5, 0))
             .as_result();
 
         assert!(result.is_err());
 
         // Attempt to place entity in an occupied space
-        let origin_handle = universe.add_entity()
+        let origin_handle = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 0, 0))
             .as_handle()
             .unwrap();
 
-        let result = universe.add_entity()
+        let result = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 0, 0))
             .as_result();
 
@@ -428,7 +459,8 @@ mod test {
         universe.remove_entity(origin_handle).unwrap();
 
         // Place an entity in a formerly occupied space
-        let mut entity = universe.add_entity()
+        let mut entity = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 0, 0))
             .as_entity_mut()
             .unwrap();
@@ -436,7 +468,8 @@ mod test {
         entity.set(Position::new(Level::Floor, 0, 0)).unwrap();
 
         // Place an entity after moving an entity out of a space
-        universe.add_entity()
+        universe
+            .add_entity()
             .set(Position::new(Level::Unit, 0, 0))
             .unwrap();
     }
@@ -447,7 +480,8 @@ mod test {
         universe.get_properties_mut().set(Bounds::new(3, 3));
 
         let position = Position::new(Level::Unit, 0, 0);
-        let expected_handle = universe.add_entity()
+        let expected_handle = universe
+            .add_entity()
             .set(position.clone())
             .as_handle()
             .unwrap();
@@ -455,11 +489,14 @@ mod test {
         let found_entity = universe.find_one(position.clone()).unwrap();
         assert_eq!(found_entity.get_handle(), expected_handle);
 
-        assert!(universe.find_one(Position::new(Level::Floor, 2, 2)).is_none());
+        assert!(universe
+            .find_one(Position::new(Level::Floor, 2, 2))
+            .is_none());
     }
 
     fn verify_query(universe: &Universe, query: impl Query, expected: Vec<Handle>) {
-        let found: HashSet<Handle> = universe.find(&query)
+        let found: HashSet<Handle> = universe
+            .find(&query)
             .unwrap()
             .map(|entity| entity.get_handle())
             .collect();
@@ -473,32 +510,41 @@ mod test {
         let mut universe = Universe::default();
         universe.get_properties_mut().set(Bounds::new(5, 5));
 
-        let handle_0_1 = universe.add_entity()
+        let handle_0_1 = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 0, 1))
             .as_handle()
             .unwrap();
 
-        let handle_2_2 = universe.add_entity()
+        let handle_2_2 = universe
+            .add_entity()
             .set(Position::new(Level::Unit, 2, 2))
             .as_handle()
             .unwrap();
 
-        let handle_0_0_floor = universe.add_entity()
+        let handle_0_0_floor = universe
+            .add_entity()
             .set(Position::new(Level::Floor, 0, 0))
             .as_handle()
             .unwrap();
 
-        verify_query(&universe, 
+        verify_query(
+            &universe,
             RectangleQuery::adjacent_to(Position::new(Level::Unit, 0, 0)),
-            vec![handle_0_1]);
+            vec![handle_0_1],
+        );
 
-        verify_query(&universe, 
+        verify_query(
+            &universe,
             RectangleQuery::adjacent_to(Position::new(Level::Unit, 1, 1)),
-            vec![handle_0_1, handle_2_2]);
+            vec![handle_0_1, handle_2_2],
+        );
 
-        verify_query(&universe, 
+        verify_query(
+            &universe,
             RectangleQuery::centered_at(Position::new(Level::Floor, 4, 2), 4),
-            vec![handle_0_0_floor]);
+            vec![handle_0_0_floor],
+        );
     }
 
     #[test]
@@ -507,20 +553,25 @@ mod test {
         let rect = RectangleQuery::centered_at(Position::new(Level::Unit, 1, 5), 2);
 
         let collected: HashSet<Position> = RectanglePositionIterator::new(&bounds, &rect).collect();
-        assert_eq!(collected, vec![
-            Position::new(Level::Unit, 0, 3),
-            Position::new(Level::Unit, 0, 4),
-            Position::new(Level::Unit, 0, 5),
-            Position::new(Level::Unit, 0, 6),
-            Position::new(Level::Unit, 1, 3),
-            Position::new(Level::Unit, 1, 4),
-            Position::new(Level::Unit, 1, 5),
-            Position::new(Level::Unit, 1, 6),
-            Position::new(Level::Unit, 2, 3),
-            Position::new(Level::Unit, 2, 4),
-            Position::new(Level::Unit, 2, 5),
-            Position::new(Level::Unit, 2, 6),
-        ].into_iter().collect());
+        assert_eq!(
+            collected,
+            vec![
+                Position::new(Level::Unit, 0, 3),
+                Position::new(Level::Unit, 0, 4),
+                Position::new(Level::Unit, 0, 5),
+                Position::new(Level::Unit, 0, 6),
+                Position::new(Level::Unit, 1, 3),
+                Position::new(Level::Unit, 1, 4),
+                Position::new(Level::Unit, 1, 5),
+                Position::new(Level::Unit, 1, 6),
+                Position::new(Level::Unit, 2, 3),
+                Position::new(Level::Unit, 2, 4),
+                Position::new(Level::Unit, 2, 5),
+                Position::new(Level::Unit, 2, 6),
+            ]
+            .into_iter()
+            .collect()
+        );
     }
 
     #[test]
@@ -532,19 +583,24 @@ mod test {
             .level(Level::Floor);
 
         let collected: HashSet<Position> = RectanglePositionIterator::new(&bounds, &rect).collect();
-        assert_eq!(collected, vec![
-            Position::new(Level::Unit, 0, 0),
-            Position::new(Level::Unit, 0, 1),
-            Position::new(Level::Unit, 1, 0),
-            Position::new(Level::Unit, 1, 1),
-            Position::new(Level::Unit, 2, 0),
-            Position::new(Level::Unit, 2, 1),
-            Position::new(Level::Floor, 0, 0),
-            Position::new(Level::Floor, 0, 1),
-            Position::new(Level::Floor, 1, 0),
-            Position::new(Level::Floor, 1, 1),
-            Position::new(Level::Floor, 2, 0),
-            Position::new(Level::Floor, 2, 1),
-        ].into_iter().collect());
+        assert_eq!(
+            collected,
+            vec![
+                Position::new(Level::Unit, 0, 0),
+                Position::new(Level::Unit, 0, 1),
+                Position::new(Level::Unit, 1, 0),
+                Position::new(Level::Unit, 1, 1),
+                Position::new(Level::Unit, 2, 0),
+                Position::new(Level::Unit, 2, 1),
+                Position::new(Level::Floor, 0, 0),
+                Position::new(Level::Floor, 0, 1),
+                Position::new(Level::Floor, 1, 0),
+                Position::new(Level::Floor, 1, 1),
+                Position::new(Level::Floor, 2, 0),
+                Position::new(Level::Floor, 2, 1),
+            ]
+            .into_iter()
+            .collect()
+        );
     }
 }

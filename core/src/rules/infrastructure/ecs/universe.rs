@@ -1,15 +1,14 @@
-use std::{
-    any::type_name,
-    collections::HashMap,
-    error::Error,
-};
+use std::{any::type_name, collections::HashMap, error::Error};
 
 use as_any::Downcast;
 
 use crate::basic_error;
 
 use super::{
-    attribute::{Attribute, BoxedAttribute}, signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature}, store::{AttributeStore, Handle, HandleIterator}, Properties, Query, QueryOne
+    attribute::{Attribute, BoxedAttribute},
+    signature::{AttributeId, AttributeIdIter, AttributeIdMap, EntitySignature, Signature},
+    store::{AttributeStore, Handle, HandleIterator},
+    Properties, Query, QueryOne,
 };
 
 /// A collection of entities where each entity is made up one or more Attributes
@@ -107,7 +106,8 @@ impl Universe {
         let attribute_id = self.id_map.get_or_assign_id::<T>();
         self.get_signature_mut(&handle)?.add(attribute_id);
 
-        self.stores.entry(attribute_id)
+        self.stores
+            .entry(attribute_id)
             .or_insert_with(|| value.create_store(&self.properties));
 
         let store = self.stores.get_mut(&attribute_id).unwrap();
@@ -217,10 +217,7 @@ impl Universe {
     }
 
     /// Collect the handles for all entities in the universe that match the specified signature
-    fn find_signature_handles(
-        &self,
-        signature: Signature,
-    ) -> impl Iterator<Item = Handle> + '_ {
+    fn find_signature_handles(&self, signature: Signature) -> impl Iterator<Item = Handle> + '_ {
         let mut handle_iter = HandleIterator::new(self.entities.keys().cloned());
         let mut length = self.entities.len();
 
@@ -242,14 +239,12 @@ impl Universe {
 
     /// Collect the all of the entities in the universe that match the specified signature
     #[inline]
-    pub fn find_signature(
-        &self,
-        signature: Signature,
-    ) -> impl Iterator<Item = EntityRef> {
-        self.find_signature_handles(signature).map(|handle| EntityRef {
-            universe: self,
-            handle,
-        })
+    pub fn find_signature(&self, signature: Signature) -> impl Iterator<Item = EntityRef> {
+        self.find_signature_handles(signature)
+            .map(|handle| EntityRef {
+                universe: self,
+                handle,
+            })
     }
 
     /// Preform an optimized lookup for a specific attribute
@@ -282,31 +277,19 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    fn find_one_handle<Q: QueryOne>(
-        &self,
-        query: Q,
-    ) -> Option<Handle> {
-        let attribute_id = self.id_map.get_id::<Q::StoredAttribute>();
-        if attribute_id.is_none() {
-            return None;
-        }
-
-        let attribute_id = attribute_id.unwrap();
+    fn find_one_handle<Q: QueryOne>(&self, query: Q) -> Option<Handle> {
+        let attribute_id = self.id_map.get_id::<Q::StoredAttribute>()?;
         let store = self.stores.get(&attribute_id).unwrap();
         query.query_one(store.as_ref())
     }
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    pub fn find_one<Q: QueryOne>(
-        &self,
-        query: Q,
-    ) -> Option<EntityRef> {
-        self.find_one_handle(query)
-            .map(|handle| EntityRef {
-                universe: self,
-                handle,
-            })
+    pub fn find_one<Q: QueryOne>(&self, query: Q) -> Option<EntityRef> {
+        self.find_one_handle(query).map(|handle| EntityRef {
+            universe: self,
+            handle,
+        })
     }
 
     /// Access the properties stored in a universe
@@ -750,7 +733,10 @@ mod test {
     struct CustomStoreAttribute(u32);
 
     impl Attribute for CustomStoreAttribute {
-        fn create_store(&self, _properties: &Properties) -> Box<dyn AttributeStore> where Self: Sized {
+        fn create_store(&self, _properties: &Properties) -> Box<dyn AttributeStore>
+        where
+            Self: Sized,
+        {
             Box::new(TestStore::default())
         }
     }
@@ -819,7 +805,9 @@ mod test {
         fn query_one(&self, store: &dyn AttributeStore) -> Option<Handle> {
             let store: &TestStore = store.downcast_ref().unwrap();
 
-            store.handle_to_value.iter()
+            store
+                .handle_to_value
+                .iter()
                 .find(|(_, value)| value.0 == self.0)
                 .map(|(handle, _)| *handle)
         }
@@ -845,7 +833,10 @@ mod test {
     fn custom_store_rejects_attributes() {
         let mut universe = Universe::default();
 
-        let result = universe.add_entity().set(CustomStoreAttribute(11)).as_result();
+        let result = universe
+            .add_entity()
+            .set(CustomStoreAttribute(11))
+            .as_result();
         assert!(result.is_err());
     }
 
@@ -857,7 +848,10 @@ mod test {
         universe.add_entity().set(CustomStoreAttribute(7)).unwrap();
 
         let found = universe.find_one(FindOne(3)).unwrap();
-        assert_eq!(*found.get::<CustomStoreAttribute>().unwrap(), CustomStoreAttribute(3));
+        assert_eq!(
+            *found.get::<CustomStoreAttribute>().unwrap(),
+            CustomStoreAttribute(3)
+        );
 
         assert!(universe.find_one(FindOne(1)).is_none());
     }

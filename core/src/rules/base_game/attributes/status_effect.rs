@@ -25,10 +25,7 @@ pub struct NumericStatusEffect {
 impl NumericStatusEffect {
     #[inline]
     pub fn new(name: &'static str, effect: NumericEffect) -> NumericStatusEffect {
-        NumericStatusEffect {
-            name,
-            effect,
-        }
+        NumericStatusEffect { name, effect }
     }
 
     #[inline]
@@ -51,7 +48,9 @@ pub struct NumericStatusEffects {
 impl NumericStatusEffects {
     /// Compute the value after status effects have been applied
     pub fn get_effected_value(&self, base: usize) -> usize {
-        let effect: isize = self.effects.iter()
+        let effect: isize = self
+            .effects
+            .iter()
             .map(|effect| effect.effect.get_effect_amount(base))
             .sum();
 
@@ -68,7 +67,10 @@ impl NumericStatusEffects {
     }
 
     pub fn remove_effect(&mut self, effect_name: &'static str) {
-        self.effects = self.effects.clone().into_iter()
+        self.effects = self
+            .effects
+            .clone()
+            .into_iter()
             .filter(|effect| effect.name != effect_name)
             .collect();
     }

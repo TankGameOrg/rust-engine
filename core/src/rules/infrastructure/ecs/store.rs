@@ -69,7 +69,11 @@ pub trait AttributeStore: std::fmt::Debug + AsAny {
     fn get_attribute(&self, handle: Handle) -> &dyn Attribute;
 
     /// Set the attribute assosiated with this handle
-    fn set_attribute(&mut self, handle: Handle, value: BoxedAttribute) -> Result<(), Box<dyn Error>>;
+    fn set_attribute(
+        &mut self,
+        handle: Handle,
+        value: BoxedAttribute,
+    ) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Debug)]
@@ -113,7 +117,7 @@ impl<T: Attribute> AttributeStore for DefaultAttributeStore<T> {
 }
 
 /// A type that can be used to find zero or more [EntityRef] in a Universe based on exactly one of their attributes
-/// 
+///
 /// [EntityRef]: crate::rules::infrastructure::ecs::EntityRef
 pub trait Query {
     type StoredAttribute: Attribute;
@@ -121,8 +125,8 @@ pub trait Query {
     fn query<'iter>(&'iter self, store: &'iter dyn AttributeStore) -> HandleIterator<'iter>;
 }
 
-/// A type that can be used to find zero or one [EntityRef] in a Universe based on exactly one of their attributes 
-/// 
+/// A type that can be used to find zero or one [EntityRef] in a Universe based on exactly one of their attributes
+///
 /// [EntityRef]: crate::rules::infrastructure::ecs::EntityRef
 pub trait QueryOne {
     type StoredAttribute: Attribute;

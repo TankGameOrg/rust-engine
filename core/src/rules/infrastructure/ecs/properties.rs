@@ -13,7 +13,8 @@ impl Properties {
     /// Get a property
     #[inline]
     pub fn get<T: Property>(&self) -> Option<&T> {
-        self.properties.get(&TypeId::of::<T>())
+        self.properties
+            .get(&TypeId::of::<T>())
             .map(|dyn_property| dyn_property.as_ref().downcast_ref::<T>().unwrap())
     }
 
@@ -24,11 +25,12 @@ impl Properties {
     }
 
     /// Set a property
-    /// 
+    ///
     /// Each property can only be set once, subsiquent attempts to set a property will trigger an assert
     #[inline]
     pub fn set<T: Property>(&mut self, property: T) {
         assert!(!self.has::<T>(), "Properies can currently only be set once");
-        self.properties.insert(TypeId::of::<T>(), Box::new(property));
+        self.properties
+            .insert(TypeId::of::<T>(), Box::new(property));
     }
 }

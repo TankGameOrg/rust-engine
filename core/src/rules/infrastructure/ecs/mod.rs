@@ -64,13 +64,13 @@
 //! ```
 
 mod attribute;
-mod signature;
 mod properties;
+mod signature;
 mod store;
 mod universe;
 
 pub use attribute::{Attribute, BoxedAttribute};
+pub use properties::{Properties, Property};
 pub use signature::Signature;
-pub use properties::{Property, Properties};
 pub use store::{AttributeStore, Handle, HandleIterator, Query, QueryOne};
 pub use universe::{AttributeIter, EntityBuilder, EntityMut, EntityRef, Universe};

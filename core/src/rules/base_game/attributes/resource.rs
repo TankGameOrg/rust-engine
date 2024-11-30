@@ -5,7 +5,7 @@ use crate::rules::infrastructure::ecs::Attribute;
 use super::{NumericStatusEffect, NumericStatusEffects};
 
 /// An in game resource that is always between [0, max]
-/// 
+///
 /// Resources are typically some kind of currency that can be aquired and spend
 /// by actions.  While the value of the resource it's self is not effected by status
 /// effects the max value can be.  If the max value ever drops below the current value
@@ -66,7 +66,8 @@ macro_rules! generic_resource {
                 Self {
                     current: std::cmp::min(current, max),
                     max,
-                    max_effects: $crate::rules::base_game::attributes::NumericStatusEffects::default(),
+                    max_effects:
+                        $crate::rules::base_game::attributes::NumericStatusEffects::default(),
                 }
             }
         }
@@ -90,28 +91,43 @@ macro_rules! generic_resource {
                 self.get_current() >= amount
             }
 
-            fn spend(&mut self, amount: usize) -> Result<(), Box<dyn std::error::Error>> where Self: Sized {
+            fn spend(&mut self, amount: usize) -> Result<(), Box<dyn std::error::Error>>
+            where
+                Self: Sized,
+            {
                 if self.can_spend(amount) {
                     self.current -= amount;
                     self.enforce_contraints();
                     Ok(())
-                }
-                else {
-                    Err($crate::basic_error!("You don't have enough {} to spend {}", self.get_display_name(), amount))
+                } else {
+                    Err($crate::basic_error!(
+                        "You don't have enough {} to spend {}",
+                        self.get_display_name(),
+                        amount
+                    ))
                 }
             }
 
-            fn aquire(&mut self, amount: usize) where Self: Sized {
+            fn aquire(&mut self, amount: usize)
+            where
+                Self: Sized,
+            {
                 self.current += amount;
                 self.enforce_contraints();
             }
 
-            fn set_base_max(&mut self, new_max: usize) where Self: Sized {
+            fn set_base_max(&mut self, new_max: usize)
+            where
+                Self: Sized,
+            {
                 self.max = new_max;
                 self.enforce_contraints();
             }
 
-            fn add_max_effect(&mut self, effect: $crate::rules::base_game::attributes::NumericStatusEffect) {
+            fn add_max_effect(
+                &mut self,
+                effect: $crate::rules::base_game::attributes::NumericStatusEffect,
+            ) {
                 self.max_effects.add_effect(effect);
                 self.enforce_contraints();
             }
@@ -155,7 +171,10 @@ mod test {
         gold.aquire(3);
         assert_eq!(gold.get_current(), 2);
 
-        gold.add_max_effect(NumericStatusEffect::new("Test Gold Boost", NumericEffect::Constant(-1)));
+        gold.add_max_effect(NumericStatusEffect::new(
+            "Test Gold Boost",
+            NumericEffect::Constant(-1),
+        ));
         assert_eq!(gold.get_max(), 1);
         assert_eq!(gold.get_base_max(), 2);
         assert_eq!(gold.get_current(), 1);
