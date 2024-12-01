@@ -2,7 +2,11 @@ use std::error::Error;
 
 use crate::rules::infrastructure::ecs::Attribute;
 
-use super::{NumericStatusEffect, NumericStatusEffects};
+use super::StatusEffectOwner;
+
+pub enum ResourceStatusEffect {
+    Max,
+}
 
 /// An in game resource that is always between [0, max]
 ///
@@ -12,7 +16,7 @@ use super::{NumericStatusEffect, NumericStatusEffects};
 /// even because of a status effect the current value will be lowered to the max and
 /// will not recover when the status effect goes away unless new resources are aquired.
 #[must_use]
-pub trait Resource: Attribute + Clone {
+pub trait Resource: Attribute + StatusEffectOwner {
     /// Get the current value of the resource
     fn get_current(&self) -> usize;
 
@@ -33,27 +37,15 @@ pub trait Resource: Attribute + Clone {
 
     /// Increase the resource's current value
     fn aquire(&mut self, amount: usize);
-
-    /// Get the status effects that effect the max value
-    fn get_max_effects(&self) -> &NumericStatusEffects;
-
-    /// Add a status effect to the max value
-    fn add_max_effect(&mut self, effect: NumericStatusEffect);
-
-    /// Remove a status effect from the max value
-    fn remove_max_effect(&mut self, effect_name: &'static str);
-
-    /// Clear all status effects from the max value
-    fn clear_max_effects(&mut self);
 }
 
 macro_rules! generic_resource {
     ($name:ident) => {
-        #[derive(Debug, Clone)]
+        #[derive(Debug)]
         pub struct $name {
             current: usize,
             max: usize,
-            max_effects: $crate::rules::base_game::attributes::NumericStatusEffects,
+            max_effects: $crate::rules::base_game::attributes::StatusEffects,
         }
 
         impl $name {
@@ -67,7 +59,7 @@ macro_rules! generic_resource {
                     current: std::cmp::min(current, max),
                     max,
                     max_effects:
-                        $crate::rules::base_game::attributes::NumericStatusEffects::default(),
+                        $crate::rules::base_game::attributes::StatusEffects::default(),
                 }
             }
         }
@@ -123,27 +115,25 @@ macro_rules! generic_resource {
                 self.max = new_max;
                 self.enforce_contraints();
             }
+        }
 
-            fn add_max_effect(
-                &mut self,
-                effect: $crate::rules::base_game::attributes::NumericStatusEffect,
-            ) {
-                self.max_effects.add_effect(effect);
-                self.enforce_contraints();
+        impl $crate::rules::base_game::attributes::StatusEffectOwner for $name {
+            type StatusEffectId = $crate::rules::base_game::attributes::ResourceStatusEffect;
+        
+            fn get_status_effects(&self, effect_id: Self::StatusEffectId) -> &$crate::rules::base_game::attributes::StatusEffects {
+                match effect_id {
+                    $crate::rules::base_game::attributes::ResourceStatusEffect::Max => &self.max_effects,
+                }
             }
-
-            fn remove_max_effect(&mut self, effect_name: &'static str) {
-                self.max_effects.remove_effect(effect_name);
-                self.enforce_contraints();
+        
+            fn get_status_effects_mut(&mut self, effect_id: Self::StatusEffectId) -> &mut $crate::rules::base_game::attributes::StatusEffects {
+                match effect_id {
+                    $crate::rules::base_game::attributes::ResourceStatusEffect::Max => &mut self.max_effects,
+                }
             }
-
-            fn clear_max_effects(&mut self) {
-                self.max_effects.clear_effects();
+        
+            fn status_effects_updated(&mut self) {
                 self.enforce_contraints();
-            }
-
-            fn get_max_effects(&self) -> &NumericStatusEffects {
-                &self.max_effects
             }
         }
     };
@@ -155,7 +145,7 @@ generic_resource!(Action);
 
 #[cfg(test)]
 mod test {
-    use crate::rules::base_game::attributes::{NumericEffect, NumericStatusEffect};
+    use crate::rules::base_game::attributes::{Effect, TestStatusEffect};
 
     use super::*;
 
@@ -171,9 +161,8 @@ mod test {
         gold.aquire(3);
         assert_eq!(gold.get_current(), 2);
 
-        gold.add_max_effect(NumericStatusEffect::new(
-            "Test Gold Boost",
-            NumericEffect::Constant(-1),
+        gold.add_effect(ResourceStatusEffect::Max, TestStatusEffect::new(
+            Effect::Constant(-1),
         ));
         assert_eq!(gold.get_max(), 1);
         assert_eq!(gold.get_base_max(), 2);
@@ -181,7 +170,7 @@ mod test {
 
         gold.aquire(3);
         assert_eq!(gold.get_current(), 1);
-        gold.clear_max_effects();
+        gold.clear_effects(ResourceStatusEffect::Max);
 
         gold.aquire(3);
         assert_eq!(gold.get_current(), 2);
