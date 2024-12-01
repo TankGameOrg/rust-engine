@@ -386,15 +386,23 @@ impl Query for RectangularArea {
 }
 
 /// Replace the entity in the specified position with an new one and return the original entity's handle
-/// 
+///
 /// If the handle for the new entity does not exist we will panic
-pub fn replace_entity_in_position(universe: &mut Universe, position: Position, new_handle: Handle) -> Option<Handle> {
+pub fn replace_entity_in_position(
+    universe: &mut Universe,
+    position: Position,
+    new_handle: Handle,
+) -> Option<Handle> {
     let old_handle_opt = universe.find_one_handle(position);
     if let Some(old_handle) = &old_handle_opt {
-        universe.get_entity_mut(*old_handle).unwrap().remove::<Position>();
+        universe
+            .get_entity_mut(*old_handle)
+            .unwrap()
+            .remove::<Position>();
     }
 
-    universe.get_entity_mut(new_handle)
+    universe
+        .get_entity_mut(new_handle)
         .unwrap()
         .set(position)
         .unwrap();
@@ -569,7 +577,8 @@ mod test {
         let bounds = Bounds::new(3, 7);
         let rect = RectangularArea::centered_at(Position::new(Level::Unit, 1, 5), 2);
 
-        let collected: HashSet<Position> = RectangularPositionIterator::new(&bounds, &rect).collect();
+        let collected: HashSet<Position> =
+            RectangularPositionIterator::new(&bounds, &rect).collect();
         assert_eq!(
             collected,
             vec![
@@ -599,7 +608,8 @@ mod test {
             .level(Level::Unit)
             .level(Level::Floor);
 
-        let collected: HashSet<Position> = RectangularPositionIterator::new(&bounds, &rect).collect();
+        let collected: HashSet<Position> =
+            RectangularPositionIterator::new(&bounds, &rect).collect();
         assert_eq!(
             collected,
             vec![
@@ -627,15 +637,11 @@ mod test {
         universe.get_properties_mut().set(Bounds::new(1, 1));
         let position = Position::new(Level::Unit, 0, 0);
 
-        let original_handle = universe.add_entity()
-            .as_handle()
-            .unwrap();
+        let original_handle = universe.add_entity().as_handle().unwrap();
 
         assert!(replace_entity_in_position(&mut universe, position, original_handle).is_none());
 
-        let new_handle = universe.add_entity()
-            .as_handle()
-            .unwrap();
+        let new_handle = universe.add_entity().as_handle().unwrap();
 
         let removed_handle = replace_entity_in_position(&mut universe, position, new_handle);
         assert_eq!(removed_handle.unwrap(), original_handle);

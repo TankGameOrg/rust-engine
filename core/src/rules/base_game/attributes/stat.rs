@@ -10,7 +10,8 @@ pub trait Stat: Attribute {
 
     /// Get the value of this stat accounting for status effects
     fn get_current(&self) -> usize {
-        self.get_status_effects().get_effected_value(self.get_base())
+        self.get_status_effects()
+            .get_effected_value(self.get_base())
     }
 
     /// Get the status effects applied to this stat
@@ -34,7 +35,8 @@ macro_rules! generic_stat {
             pub fn new(base: usize) -> $name {
                 Self {
                     base,
-                    status_effects: $crate::rules::base_game::status_effects::StatusEffects::default(),
+                    status_effects:
+                        $crate::rules::base_game::status_effects::StatusEffects::default(),
                 }
             }
         }
@@ -42,11 +44,15 @@ macro_rules! generic_stat {
         impl $crate::rules::infrastructure::ecs::Attribute for $name {}
 
         impl $crate::rules::base_game::attributes::Stat for $name {
-            fn get_status_effects(&self) -> &$crate::rules::base_game::status_effects::StatusEffects {
+            fn get_status_effects(
+                &self,
+            ) -> &$crate::rules::base_game::status_effects::StatusEffects {
                 &self.status_effects
             }
 
-            fn get_status_effects_mut(&mut self) -> &mut $crate::rules::base_game::status_effects::StatusEffects {
+            fn get_status_effects_mut(
+                &mut self,
+            ) -> &mut $crate::rules::base_game::status_effects::StatusEffects {
                 &mut self.status_effects
             }
 
@@ -64,7 +70,12 @@ macro_rules! generic_stat {
                 use $crate::rules::base_game::attributes::Stat;
 
                 f.write_str("Stat { ")?;
-                f.write_fmt(format_args!("base: {}, current: {}, status_effects: {:?} ", self.get_base(), self.get_current(), self.get_status_effects()))?;
+                f.write_fmt(format_args!(
+                    "base: {}, current: {}, status_effects: {:?} ",
+                    self.get_base(),
+                    self.get_current(),
+                    self.get_status_effects()
+                ))?;
                 f.write_str(" }")
             }
         }
@@ -72,11 +83,17 @@ macro_rules! generic_stat {
 }
 
 generic_stat!(Range, "The distance that an entity can shoot");
-generic_stat!(Speed, "The number of spaces an entity can move in one action");
+generic_stat!(
+    Speed,
+    "The number of spaces an entity can move in one action"
+);
 
 #[cfg(test)]
 mod test {
-    use crate::rules::base_game::status_effects::{test::{TestStatusEffect, TestStatusEffect2}, Effect};
+    use crate::rules::base_game::status_effects::{
+        test::{TestStatusEffect, TestStatusEffect2},
+        Effect,
+    };
 
     use super::*;
 
@@ -86,10 +103,14 @@ mod test {
 
         assert_eq!(range.get_current(), 2);
 
-        range.get_status_effects_mut().add_effect(TestStatusEffect::new(Effect::Constant(1)));
+        range
+            .get_status_effects_mut()
+            .add_effect(TestStatusEffect::new(Effect::Constant(1)));
         assert_eq!(range.get_current(), 3);
 
-        range.get_status_effects_mut().add_effect(TestStatusEffect2::new(Effect::Percent(2.0)));
+        range
+            .get_status_effects_mut()
+            .add_effect(TestStatusEffect2::new(Effect::Percent(2.0)));
         assert_eq!(range.get_current(), 7);
 
         range.set_base(5);

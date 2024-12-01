@@ -217,7 +217,10 @@ impl Universe {
     }
 
     /// Collect the handles for all entities in the universe that match the specified signature
-    pub fn find_signature_handles(&self, signature: Signature) -> impl Iterator<Item = Handle> + '_ {
+    pub fn find_signature_handles(
+        &self,
+        signature: Signature,
+    ) -> impl Iterator<Item = Handle> + '_ {
         let mut handle_iter = HandleIterator::new(self.entities.keys().cloned());
         let mut length = self.entities.len();
 

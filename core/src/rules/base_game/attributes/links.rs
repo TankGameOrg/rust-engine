@@ -5,12 +5,12 @@ use as_any::Downcast;
 use crate::rules::infrastructure::ecs::{Attribute, AttributeStore, Handle, HandleIterator, Query};
 
 /// A link to another entity
-/// 
-/// Links can be fed to find() to find all backlinks i.e. If Tank1 has a Link(Player1) the 
+///
+/// Links can be fed to find() to find all backlinks i.e. If Tank1 has a Link(Player1) the
 /// `find(Link(Player1)) = [Tank1]`
 pub trait Link: Attribute + std::hash::Hash + PartialEq + Eq + Clone {
     /// The handle to the other entity
-   fn get_handle(&self) -> Handle;
+    fn get_handle(&self) -> Handle;
 }
 
 #[macro_export]
@@ -34,8 +34,14 @@ macro_rules! generic_link {
     };
 }
 
-generic_link!(Owner, "A link to the player (entity) that controls this entity");
-generic_link!(TeamMember, "A link to the team that the current player is a part of");
+generic_link!(
+    Owner,
+    "A link to the player (entity) that controls this entity"
+);
+generic_link!(
+    TeamMember,
+    "A link to the team that the current player is a part of"
+);
 
 /// A store to track a specific kind of link between entities
 #[derive(Debug)]
@@ -67,15 +73,17 @@ impl<T: Link> AttributeStore for HandleReverseLookup<T> {
     }
 
     fn set_attribute(
-            &mut self,
-            handle: Handle,
-            value: crate::rules::infrastructure::ecs::BoxedAttribute,
-        ) -> Result<(), Box<dyn std::error::Error>> {
+        &mut self,
+        handle: Handle,
+        value: crate::rules::infrastructure::ecs::BoxedAttribute,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let value: T = value.downcast()?;
 
         self.handle_to_link.insert(handle.clone(), value.clone());
 
-        self.link_to_handle.entry(value.clone()).or_insert_with(|| HashSet::default());
+        self.link_to_handle
+            .entry(value.clone())
+            .or_insert_with(|| HashSet::default());
         self.link_to_handle.get_mut(&value).unwrap().insert(handle);
         Ok(())
     }
@@ -94,9 +102,13 @@ impl<T: Link> AttributeStore for HandleReverseLookup<T> {
 }
 
 impl<T: Link> Attribute for T {
-    fn create_store(&self, _properties: &crate::rules::infrastructure::ecs::Properties) -> Box<dyn AttributeStore>
-        where
-            Self: Sized, {
+    fn create_store(
+        &self,
+        _properties: &crate::rules::infrastructure::ecs::Properties,
+    ) -> Box<dyn AttributeStore>
+    where
+        Self: Sized,
+    {
         Box::new(HandleReverseLookup::<T>::default())
     }
 }
@@ -109,8 +121,7 @@ impl<T: Link> Query for T {
 
         if let Some(handle_set) = store.link_to_handle.get(self) {
             HandleIterator::new(handle_set.iter().cloned())
-        }
-        else {
+        } else {
             HandleIterator::empty()
         }
     }
@@ -125,7 +136,8 @@ mod test {
     use super::*;
 
     fn find_handle_set(universe: &Universe, team_handle: Handle) -> HashSet<Handle> {
-        universe.find(&TeamMember(team_handle))
+        universe
+            .find(&TeamMember(team_handle))
             .unwrap()
             .map(|entity| entity.get_handle())
             .collect()
@@ -136,19 +148,22 @@ mod test {
         let mut universe = Universe::default();
         let team_handle = universe.add_entity().as_handle().unwrap();
 
-        let team_member1 = universe.add_entity()
+        let team_member1 = universe
+            .add_entity()
             .set(TeamMember::new(team_handle))
             .as_handle()
             .unwrap();
 
-        let team_member2 = universe.add_entity()
+        let team_member2 = universe
+            .add_entity()
             .set(TeamMember::new(team_handle))
             .as_handle()
             .unwrap();
 
         let other_team_handle = universe.add_entity().as_handle().unwrap();
 
-        let other_team_member = universe.add_entity()
+        let other_team_member = universe
+            .add_entity()
             .set(TeamMember::new(other_team_handle))
             .as_handle()
             .unwrap();
@@ -160,7 +175,10 @@ mod test {
         let other_team = find_handle_set(&universe, other_team_handle);
         assert!(other_team.contains(&other_team_member));
 
-        universe.get_entity_mut(other_team_member).unwrap().remove::<TeamMember>();
+        universe
+            .get_entity_mut(other_team_member)
+            .unwrap()
+            .remove::<TeamMember>();
 
         let empty_team = find_handle_set(&universe, other_team_handle);
         assert_eq!(empty_team.len(), 0);

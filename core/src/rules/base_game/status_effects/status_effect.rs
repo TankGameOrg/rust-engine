@@ -79,7 +79,9 @@ impl StatusEffects {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &dyn StatusEffect> {
-        self.effects.values().map(|modification| modification.as_ref())
+        self.effects
+            .values()
+            .map(|modification| modification.as_ref())
     }
 }
 
@@ -103,7 +105,7 @@ pub mod test {
                 fn get_name(&self) -> &'static str {
                     "My test status effect"
                 }
-                
+
                 fn get_effect(&self) -> Effect {
                     self.0
                 }
