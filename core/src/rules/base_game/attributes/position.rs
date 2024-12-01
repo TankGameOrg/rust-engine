@@ -140,13 +140,13 @@ impl Bounds {
 
 /// A rectangular area that spans one or more [`Level`]s that can be used to search the area it describes
 ///
-/// Give this to the [`RectanglePositionIterator`] to find all in bounds Positions within the space decribed
+/// Give this to the [`RectangularPositionIterator`] to find all in bounds Positions within the space decribed
 /// Give this to [`Universe::find`] to find all of the [`Entities`] within the space described
 ///
 /// [`Entities`]: crate::rules::infrastructure::ecs::EntityRef
 /// [`Universe::find`]: crate::rules::infrastructure::ecs::Universe::find
 #[derive(Debug, Default)]
-pub struct RectangleQuery {
+pub struct RectangularArea {
     levels: Vec<Level>,
     top_left_x: usize,
     top_left_y: usize,
@@ -154,7 +154,7 @@ pub struct RectangleQuery {
     bottom_right_y: usize,
 }
 
-impl RectangleQuery {
+impl RectangularArea {
     /// Set the top left corner of the query
     pub fn top_left(mut self, x: usize, y: usize) -> Self {
         self.top_left_x = x;
@@ -206,15 +206,15 @@ enum IteratorState {
     Active(Position),
 }
 
-/// An iterator that can iterate all of the in bounds spaces in a [`RectangleQuery`]
-pub struct RectanglePositionIterator<'iter> {
+/// An iterator that can iterate all of the in bounds spaces in a [`RectangularArea`]
+pub struct RectangularPositionIterator<'iter> {
     bounds: &'iter Bounds,
-    query: &'iter RectangleQuery,
+    query: &'iter RectangularArea,
     state: IteratorState,
 }
 
-impl<'iter> RectanglePositionIterator<'iter> {
-    fn new(bounds: &'iter Bounds, query: &'iter RectangleQuery) -> Self {
+impl<'iter> RectangularPositionIterator<'iter> {
+    fn new(bounds: &'iter Bounds, query: &'iter RectangularArea) -> Self {
         Self {
             bounds,
             query,
@@ -233,7 +233,7 @@ impl<'iter> RectanglePositionIterator<'iter> {
     }
 }
 
-impl<'iter> Iterator for RectanglePositionIterator<'iter> {
+impl<'iter> Iterator for RectangularPositionIterator<'iter> {
     type Item = Position;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -372,14 +372,14 @@ impl AttributeStore for Board {
     }
 }
 
-impl Query for RectangleQuery {
+impl Query for RectangularArea {
     type StoredAttribute = Position;
 
     fn query<'iter>(&'iter self, store: &'iter dyn AttributeStore) -> HandleIterator<'iter> {
         let store: &Board = store.downcast_ref().unwrap();
 
         HandleIterator::new(
-            RectanglePositionIterator::new(&store.bounds, self)
+            RectangularPositionIterator::new(&store.bounds, self)
                 .filter_map(|position| store.get_from_position(&position)),
         )
     }
@@ -530,19 +530,19 @@ mod test {
 
         verify_query(
             &universe,
-            RectangleQuery::adjacent_to(Position::new(Level::Unit, 0, 0)),
+            RectangularArea::adjacent_to(Position::new(Level::Unit, 0, 0)),
             vec![handle_0_1],
         );
 
         verify_query(
             &universe,
-            RectangleQuery::adjacent_to(Position::new(Level::Unit, 1, 1)),
+            RectangularArea::adjacent_to(Position::new(Level::Unit, 1, 1)),
             vec![handle_0_1, handle_2_2],
         );
 
         verify_query(
             &universe,
-            RectangleQuery::centered_at(Position::new(Level::Floor, 4, 2), 4),
+            RectangularArea::centered_at(Position::new(Level::Floor, 4, 2), 4),
             vec![handle_0_0_floor],
         );
     }
@@ -550,9 +550,9 @@ mod test {
     #[test]
     fn out_of_bounds_rectangle_position_iter() {
         let bounds = Bounds::new(3, 7);
-        let rect = RectangleQuery::centered_at(Position::new(Level::Unit, 1, 5), 2);
+        let rect = RectangularArea::centered_at(Position::new(Level::Unit, 1, 5), 2);
 
-        let collected: HashSet<Position> = RectanglePositionIterator::new(&bounds, &rect).collect();
+        let collected: HashSet<Position> = RectangularPositionIterator::new(&bounds, &rect).collect();
         assert_eq!(
             collected,
             vec![
@@ -577,12 +577,12 @@ mod test {
     #[test]
     fn iterate_multiple_levels() {
         let bounds = Bounds::new(5, 5);
-        let rect = RectangleQuery::default()
+        let rect = RectangularArea::default()
             .bottom_right(2, 1)
             .level(Level::Unit)
             .level(Level::Floor);
 
-        let collected: HashSet<Position> = RectanglePositionIterator::new(&bounds, &rect).collect();
+        let collected: HashSet<Position> = RectangularPositionIterator::new(&bounds, &rect).collect();
         assert_eq!(
             collected,
             vec![

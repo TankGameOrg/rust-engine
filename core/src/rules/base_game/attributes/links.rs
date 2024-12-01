@@ -13,6 +13,7 @@ pub trait Link: Attribute + std::hash::Hash + PartialEq + Eq + Clone {
    fn get_handle(&self) -> Handle;
 }
 
+#[macro_export]
 macro_rules! generic_link {
     ($name:ident, $doc:tt) => {
         #[derive(Debug, Hash, Eq, PartialEq, Clone)]
