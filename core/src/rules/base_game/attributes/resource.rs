@@ -16,7 +16,7 @@ pub trait Resource: Attribute {
     fn set_max(&mut self, new_max: ResourceMax);
 }
 
-/// A Currency that can be aquired and spend by actions.  
+/// A currency that can be aquired and spend by actions.  
 pub trait Currency: Resource {
     /// Check if there is enough of a resource to spend it
     fn can_spend(&self, amount: usize) -> bool;
@@ -26,6 +26,20 @@ pub trait Currency: Resource {
 
     /// Increase the resource's current value
     fn aquire(&mut self, amount: usize);
+}
+
+/// An attribute for storing the health of an entity
+pub trait HitPoints: Resource {
+    /// Reduce the entity's hit points
+    fn damage(&mut self, damage: usize);
+
+    /// Increase the entity's hit points
+    fn heal(&mut self, heal: usize);
+
+    /// Check if the entity's hit points are 0
+    fn is_dead(&self) -> bool {
+        self.get_current() == 0
+    }
 }
 
 #[macro_export]
@@ -75,6 +89,7 @@ macro_rules! generic_resource {
     };
 }
 
+#[macro_export]
 macro_rules! generic_currency {
     ($name:ident) => {
         $crate::generic_resource!($name);
@@ -112,9 +127,34 @@ macro_rules! generic_currency {
     };
 }
 
+#[macro_export]
+macro_rules! generic_hit_points {
+    ($name:ident) => {
+        generic_resource!($name);
+
+        impl HitPoints for $name {
+            fn damage(&mut self, damage: usize) {
+                if self.current < damage {
+                    self.current = 0;
+                }
+                else {
+                    self.current -= damage;
+                }
+            }
+
+            fn heal(&mut self, heal: usize) {
+                self.current += heal;
+                self.enforce_contraints();
+            }
+        }
+    };
+}
+
 // Define some resouces that are commonly used across game versions
 generic_currency!(Gold);
 generic_currency!(Action);
+generic_hit_points!(Durability);
+generic_hit_points!(Health);
 
 #[cfg(test)]
 mod test {
@@ -157,5 +197,26 @@ mod test {
         gold.set_max(ResourceMax::new(5));
         gold.aquire(2);
         assert_eq!(gold.get_current(), 4);
+    }
+
+    #[test]
+    fn test_hit_points() {
+        let mut health = Health::new(3, ResourceMax::new(5));
+
+        assert!(!health.is_dead());
+
+        health.damage(1);
+        assert_eq!(health.get_current(), 2);
+
+        health.damage(7);
+        assert_eq!(health.get_current(), 0);
+        assert!(health.is_dead());
+
+        health.heal(12);
+        assert_eq!(health.get_current(), 5);
+
+        health.damage(3);
+        health.heal(1);
+        assert_eq!(health.get_current(), 3);
     }
 }
