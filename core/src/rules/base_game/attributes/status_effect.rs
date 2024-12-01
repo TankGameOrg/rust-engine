@@ -80,93 +80,47 @@ impl StatusEffects {
     }
 }
 
-pub trait StatusEffectOwner {
-    type StatusEffectId;
-
-    fn get_status_effects(&self, effect_id: Self::StatusEffectId) -> &StatusEffects;
-    fn get_status_effects_mut(&mut self, effect_id: Self::StatusEffectId) -> &mut StatusEffects;
-
-    fn add_effect<T: StatusEffect>(&mut self, effect_id: Self::StatusEffectId, effect: T) {
-        self.get_status_effects_mut(effect_id).add_effect(effect);
-        self.status_effects_updated();
-    }
-
-    fn remove_effect<T: StatusEffect>(&mut self, effect_id: Self::StatusEffectId) {
-        self.get_status_effects_mut(effect_id).remove_effect::<T>();
-        self.status_effects_updated();
-    }
-
-    fn clear_effects(&mut self, effect_id: Self::StatusEffectId) {
-        self.get_status_effects_mut(effect_id).clear_effects();
-        self.status_effects_updated();
-    }
-
-    fn status_effects_updated(&mut self) {}
-}
-
-/// A status effect that can be used for testing status effect users
 #[cfg(test)]
-#[derive(Debug, Clone)]
-pub struct TestStatusEffect(Effect);
-
-#[cfg(test)]
-impl TestStatusEffect {
-    pub fn new(effect: Effect) -> TestStatusEffect {
-        TestStatusEffect(effect)
-    }
-}
-
-#[cfg(test)]
-impl StatusEffect for TestStatusEffect {
-    fn get_name(&self) -> &'static str {
-        "My test status effect"
-    }
-    
-    fn get_amount(&self) -> Effect {
-        self.0
-    }
-}
-
-#[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
 
-    #[derive(Debug, Clone)]
-    struct FooEffect;
+    macro_rules! test_status_effect {
+        ($name:ident) => {
+            /// A status effect that can be used for testing status effect users
+            #[derive(Debug, Clone)]
+            pub struct $name(Effect);
 
-    impl StatusEffect for FooEffect {
-        fn get_name(&self) -> &'static str {
-            "My test effect"
-        }
+            impl $name {
+                pub fn new(effect: Effect) -> Self {
+                    Self(effect)
+                }
+            }
 
-        fn get_amount(&self) -> Effect {
-            Effect::Constant(1)
-        }
+            impl StatusEffect for $name {
+                fn get_name(&self) -> &'static str {
+                    "My test status effect"
+                }
+                
+                fn get_amount(&self) -> Effect {
+                    self.0
+                }
+            }
+        };
     }
 
-    #[derive(Debug, Clone)]
-    struct BarEffect;
-
-    impl StatusEffect for BarEffect {
-        fn get_name(&self) -> &'static str {
-            "My test effect"
-        }
-
-        fn get_amount(&self) -> Effect {
-            Effect::Percent(0.5)
-        }
-    }
+    test_status_effect!(TestStatusEffect);
+    test_status_effect!(TestStatusEffect2);
 
     #[test]
     fn test() {
         let mut effects = StatusEffects::default();
-        effects.add_effect(FooEffect);
-        effects.add_effect(BarEffect);
+        effects.add_effect(TestStatusEffect::new(Effect::Constant(1)));
+        effects.add_effect(TestStatusEffect2::new(Effect::Percent(0.5)));
 
         assert_eq!(effects.get_effected_value(1), 2);
         assert_eq!(effects.get_effected_value(2), 4);
 
-        effects.remove_effect::<BarEffect>();
+        effects.remove_effect::<TestStatusEffect2>();
 
         assert_eq!(effects.get_effected_value(1), 2);
         assert_eq!(effects.get_effected_value(2), 3);
