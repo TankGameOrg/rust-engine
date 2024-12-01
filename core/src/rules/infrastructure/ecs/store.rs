@@ -1,25 +1,23 @@
 use std::{
     collections::HashMap,
-    error::Error,
-    sync::atomic::{AtomicUsize, Ordering},
+    error::Error
 };
 
 use as_any::AsAny;
+use uuid::Uuid;
 
 use super::{attribute::BoxedAttribute, Attribute};
 
 /// A handle can be used to access and modify an Entity in a Universe
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 #[must_use]
-pub struct Handle(usize);
-
-static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0);
+pub struct Handle(Uuid);
 
 impl Attribute for Handle {}
 
 impl Handle {
     pub(super) fn new() -> Handle {
-        Handle(NEXT_HANDLE.fetch_add(1, Ordering::Relaxed))
+        Handle(Uuid::new_v4())
     }
 }
 
