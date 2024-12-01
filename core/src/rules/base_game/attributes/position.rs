@@ -6,7 +6,7 @@ use crate::{
     basic_error,
     rules::infrastructure::ecs::{
         Attribute, AttributeStore, BoxedAttribute, Handle, HandleIterator, Properties, Property,
-        Query, QueryOne,
+        Query, QueryOne, Universe,
     },
 };
 
@@ -385,6 +385,23 @@ impl Query for RectangularArea {
     }
 }
 
+/// Replace the entity in the specified position with an new one and return the original entity's handle
+/// 
+/// If the handle for the new entity does not exist we will panic
+pub fn replace_entity_in_position(universe: &mut Universe, position: Position, new_handle: Handle) -> Option<Handle> {
+    let old_handle_opt = universe.find_one_handle(position);
+    if let Some(old_handle) = &old_handle_opt {
+        universe.get_entity_mut(*old_handle).unwrap().remove::<Position>();
+    }
+
+    universe.get_entity_mut(new_handle)
+        .unwrap()
+        .set(position)
+        .unwrap();
+
+    old_handle_opt
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashSet;
@@ -602,5 +619,25 @@ mod test {
             .into_iter()
             .collect()
         );
+    }
+
+    #[test]
+    fn replace_entity() {
+        let mut universe = Universe::default();
+        universe.get_properties_mut().set(Bounds::new(1, 1));
+        let position = Position::new(Level::Unit, 0, 0);
+
+        let original_handle = universe.add_entity()
+            .as_handle()
+            .unwrap();
+
+        assert!(replace_entity_in_position(&mut universe, position, original_handle).is_none());
+
+        let new_handle = universe.add_entity()
+            .as_handle()
+            .unwrap();
+
+        let removed_handle = replace_entity_in_position(&mut universe, position, new_handle);
+        assert_eq!(removed_handle.unwrap(), original_handle);
     }
 }

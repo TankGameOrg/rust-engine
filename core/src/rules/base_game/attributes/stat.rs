@@ -1,6 +1,4 @@
-use crate::rules::infrastructure::ecs::Attribute;
-
-use super::StatusEffects;
+use crate::rules::{base_game::status_effects::StatusEffects, infrastructure::ecs::Attribute};
 
 /// A stat is a numeric value that represents an entity's proficiency in a skill
 pub trait Stat: Attribute {
@@ -29,14 +27,14 @@ macro_rules! generic_stat {
         #[doc=$doc]
         pub struct $name {
             base: usize,
-            status_effects: $crate::rules::base_game::attributes::StatusEffects,
+            status_effects: $crate::rules::base_game::status_effects::StatusEffects,
         }
 
         impl $name {
             pub fn new(base: usize) -> $name {
                 Self {
                     base,
-                    status_effects: $crate::rules::base_game::attributes::StatusEffects::default(),
+                    status_effects: $crate::rules::base_game::status_effects::StatusEffects::default(),
                 }
             }
         }
@@ -44,11 +42,11 @@ macro_rules! generic_stat {
         impl $crate::rules::infrastructure::ecs::Attribute for $name {}
 
         impl $crate::rules::base_game::attributes::Stat for $name {
-            fn get_status_effects(&self) -> &$crate::rules::base_game::attributes::StatusEffects {
+            fn get_status_effects(&self) -> &$crate::rules::base_game::status_effects::StatusEffects {
                 &self.status_effects
             }
 
-            fn get_status_effects_mut(&mut self) -> &mut $crate::rules::base_game::attributes::StatusEffects {
+            fn get_status_effects_mut(&mut self) -> &mut $crate::rules::base_game::status_effects::StatusEffects {
                 &mut self.status_effects
             }
 
@@ -78,7 +76,7 @@ generic_stat!(Speed, "The number of spaces an entity can move in one action");
 
 #[cfg(test)]
 mod test {
-    use crate::rules::base_game::attributes::{Effect, test::{TestStatusEffect, TestStatusEffect2}};
+    use crate::rules::base_game::status_effects::{test::{TestStatusEffect, TestStatusEffect2}, Effect};
 
     use super::*;
 

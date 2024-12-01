@@ -19,8 +19,11 @@ impl Effect {
 
 /// A status effect that can be applied to a numeric attribute
 pub trait StatusEffect: std::fmt::Debug + Send + Sync + StatusEffectClone + 'static {
+    /// Get a human readable name for this status effect
     fn get_name(&self) -> &'static str;
-    fn get_amount(&self) -> Effect;
+
+    /// Get the [`Effect`] that this status effect applies
+    fn get_effect(&self) -> Effect;
 }
 
 /// Clone for StatusEffect implementors
@@ -52,7 +55,7 @@ impl StatusEffects {
         let effect: isize = self
             .effects
             .values()
-            .map(|effect| effect.get_amount().get_effect_amount(base))
+            .map(|effect| effect.get_effect().get_effect_amount(base))
             .sum();
 
         let mut effected = (base as isize) + effect;
@@ -101,7 +104,7 @@ pub mod test {
                     "My test status effect"
                 }
                 
-                fn get_amount(&self) -> Effect {
+                fn get_effect(&self) -> Effect {
                     self.0
                 }
             }

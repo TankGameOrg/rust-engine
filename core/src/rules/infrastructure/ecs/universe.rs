@@ -217,7 +217,7 @@ impl Universe {
     }
 
     /// Collect the handles for all entities in the universe that match the specified signature
-    fn find_signature_handles(&self, signature: Signature) -> impl Iterator<Item = Handle> + '_ {
+    pub fn find_signature_handles(&self, signature: Signature) -> impl Iterator<Item = Handle> + '_ {
         let mut handle_iter = HandleIterator::new(self.entities.keys().cloned());
         let mut length = self.entities.len();
 
@@ -249,7 +249,7 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    fn find_handles<'iter, Q: Query>(
+    pub fn find_handles<'iter, Q: Query>(
         &'iter self,
         query: &'iter Q,
     ) -> Result<impl Iterator<Item = Handle> + 'iter, Box<dyn Error>> {
@@ -277,7 +277,7 @@ impl Universe {
 
     /// Preform an optimized lookup for a specific attribute
     #[inline]
-    fn find_one_handle<Q: QueryOne>(&self, query: Q) -> Option<Handle> {
+    pub fn find_one_handle<Q: QueryOne>(&self, query: Q) -> Option<Handle> {
         let attribute_id = self.id_map.get_id::<Q::StoredAttribute>()?;
         let store = self.stores.get(&attribute_id).unwrap();
         query.query_one(store.as_ref())

@@ -160,7 +160,7 @@ generic_hit_points!(Health, "The 'Health' of a living entity");
 
 #[cfg(test)]
 mod test {
-    use crate::rules::base_game::attributes::{test::TestStatusEffect, Effect, Stat};
+    use crate::rules::base_game::{attributes::Stat, status_effects::{test::TestStatusEffect, Effect}};
 
     use super::*;
 
