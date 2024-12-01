@@ -24,8 +24,9 @@ pub trait Stat: Attribute {
 
 #[macro_export]
 macro_rules! generic_stat {
-    ($name:ident) => {
+    ($name:ident, $doc:tt) => {
         #[derive(Clone)]
+        #[doc=$doc]
         pub struct $name {
             base: usize,
             status_effects: $crate::rules::base_game::attributes::StatusEffects,
@@ -72,8 +73,8 @@ macro_rules! generic_stat {
     };
 }
 
-generic_stat!(Range);
-generic_stat!(Speed);
+generic_stat!(Range, "The distance that an entity can shoot");
+generic_stat!(Speed, "The number of spaces an entity can move in one action");
 
 #[cfg(test)]
 mod test {

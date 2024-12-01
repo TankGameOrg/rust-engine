@@ -2,7 +2,7 @@ use std::error::Error;
 
 use crate::{generic_stat, rules::infrastructure::ecs::Attribute};
 
-generic_stat!(ResourceMax);
+generic_stat!(ResourceMax, "The max number of a resource that an entity can hold");
 
 /// A finite in game resource that is always between [0, max]
 pub trait Resource: Attribute {
@@ -44,8 +44,9 @@ pub trait HitPoints: Resource {
 
 #[macro_export]
 macro_rules! generic_resource {
-    ($name:ident) => {
+    ($name:ident, $doc:tt) => {
         #[derive(Debug)]
+        #[doc=$doc]
         pub struct $name {
             current: usize,
             max: ResourceMax,
@@ -91,8 +92,8 @@ macro_rules! generic_resource {
 
 #[macro_export]
 macro_rules! generic_currency {
-    ($name:ident) => {
-        $crate::generic_resource!($name);
+    ($name:ident, $doc:tt) => {
+        $crate::generic_resource!($name, $doc);
         
         impl $crate::rules::base_game::attributes::Currency for $name {
             fn can_spend(&self, amount: usize) -> bool {
@@ -129,10 +130,10 @@ macro_rules! generic_currency {
 
 #[macro_export]
 macro_rules! generic_hit_points {
-    ($name:ident) => {
-        generic_resource!($name);
+    ($name:ident, $doc:tt) => {
+        $crate::generic_resource!($name, $doc);
 
-        impl HitPoints for $name {
+        impl $crate::rules::base_game::attributes::HitPoints for $name {
             fn damage(&mut self, damage: usize) {
                 if self.current < damage {
                     self.current = 0;
@@ -151,10 +152,11 @@ macro_rules! generic_hit_points {
 }
 
 // Define some resouces that are commonly used across game versions
-generic_currency!(Gold);
-generic_currency!(Action);
-generic_hit_points!(Durability);
-generic_hit_points!(Health);
+generic_currency!(Gold, "A mineable currency that can be used to by a wide variety of things");
+generic_currency!(Action, "A currency that can be used to perform some actions");
+generic_currency!(Bounty, "A reward for killing a living entity");
+generic_hit_points!(Durability, "The 'Health' of an non living entity");
+generic_hit_points!(Health, "The 'Health' of a living entity");
 
 #[cfg(test)]
 mod test {
