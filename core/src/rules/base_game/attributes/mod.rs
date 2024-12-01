@@ -1,3 +1,4 @@
+///! A list of attributes that are shared across several versions of the game
 mod position;
 mod stat;
 mod resource;
